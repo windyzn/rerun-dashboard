@@ -1,0 +1,1165 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rerun Sample QC Dashboard</title>
+<style>
+  :root{
+    --bg:#f7f8fa; --card-bg:#ffffff; --border:#e1e4e8; --text:#1f2328; --muted:#6b7280;
+    --pass-bg:#e6f4ea; --pass-text:#1e7b34; --fail-bg:#fdecea; --fail-text:#c62828;
+    --warn-bg:#fff4e5; --warn-text:#8a5a00; --accent:#2f6fed;
+  }
+  *{ box-sizing:border-box; }
+  body{ font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; background:var(--bg); color:var(--text); margin:0; }
+  header{ display:flex; align-items:center; justify-content:space-between; padding:12px 20px; background:#fff; border-bottom:1px solid var(--border); flex-wrap:wrap; gap:10px; position:sticky; top:0; z-index:10; }
+  header h1{ font-size:18px; margin:0; }
+  nav{ display:flex; gap:6px; flex-wrap:wrap; }
+  .nav-btn{ padding:6px 12px; border:1px solid var(--border); background:#fff; border-radius:6px; cursor:pointer; font-size:13px; }
+  .nav-btn.active{ background:var(--accent); color:#fff; border-color:var(--accent); }
+  .assumptions-toggle{ background:var(--warn-bg); color:var(--warn-text); border:1px solid #f0c36d; border-radius:6px; padding:6px 10px; cursor:pointer; font-size:13px; }
+  .assumptions-panel{ background:#fff8ec; border-bottom:1px solid #f0c36d; padding:14px 20px; font-size:13px; }
+  .assumptions-panel ul{ margin:8px 0 0; padding-left:20px; }
+  .hidden{ display:none !important; }
+  main{ max-width:1200px; margin:0 auto; padding:20px 20px 60px; }
+  .view{ display:none; }
+  .view.active{ display:block; }
+  h2{ font-size:16px; margin-top:28px; }
+  h3.subhead{ font-size:14px; margin-top:20px; color:var(--muted); }
+  .hint{ color:var(--muted); font-size:13px; }
+  textarea{ width:100%; font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:12.5px; padding:8px; border:1px solid var(--border); border-radius:6px; }
+  input[type=text]{ padding:6px 8px; border:1px solid var(--border); border-radius:6px; font-size:13px; width:100%; }
+  select{ padding:5px 6px; border:1px solid var(--border); border-radius:6px; font-size:12.5px; max-width:220px; }
+  .num-input{ width:80px !important; }
+  button{ font-family:inherit; }
+  #parseRefPanelBtn, #parseGridBtn, #saveClassifiedBtn, #createComparisonBtn, .btn{ padding:7px 14px; border-radius:6px; border:1px solid var(--accent); background:var(--accent); color:#fff; cursor:pointer; font-size:13px; }
+  .secondary{ padding:7px 14px; border-radius:6px; border:1px solid var(--accent); background:#fff; color:var(--accent); cursor:pointer; font-size:13px; }
+  .link-btn{ background:none; border:none; color:var(--accent); cursor:pointer; font-size:13px; padding:4px 0; }
+  .link-btn.danger{ color:var(--fail-text); }
+  table{ width:100%; border-collapse:collapse; margin-top:8px; font-size:12.5px; }
+  th, td{ text-align:left; padding:5px 7px; border-bottom:1px solid var(--border); vertical-align:top; }
+  th{ cursor:pointer; user-select:none; background:#fafbfc; white-space:nowrap; }
+  .card{ background:var(--card-bg); border:1px solid var(--border); border-radius:8px; padding:16px; margin-bottom:16px; }
+  .card-header{ display:flex; justify-content:space-between; align-items:flex-start; gap:10px; }
+  .card-header h3{ margin:0 0 2px; font-size:15px; }
+  .card-subtitle{ color:var(--muted); font-size:12.5px; }
+  .badge{ padding:3px 10px; border-radius:12px; font-size:12px; font-weight:600; white-space:nowrap; }
+  .badge-pass{ background:var(--pass-bg); color:var(--pass-text); }
+  .badge-fail{ background:var(--fail-bg); color:var(--fail-text); }
+  .badge-vip{ background:#f3e8fc; color:#7b2cbf; padding:2px 7px; border-radius:8px; font-size:11px; margin-left:6px; }
+  .flag-pills{ margin:8px 0; display:flex; gap:6px; flex-wrap:wrap; }
+  .flag-pill{ background:var(--warn-bg); color:var(--warn-text); border:1px solid #f0c36d; border-radius:6px; padding:4px 8px; font-size:12px; }
+  .card-sentence{ font-size:13.5px; line-height:1.5; }
+  .recommendation{ background:#f2f6ff; border:1px solid #cddcfb; border-radius:6px; padding:8px 10px; font-size:13px; }
+  .counts-table{ max-width:460px; }
+  .histogram{ display:flex; align-items:flex-end; gap:6px; height:110px; margin:14px 0 28px; }
+  .hist-bar-wrap{ flex:1; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; height:100%; position:relative; }
+  .hist-bar{ width:100%; background:#c7d6f5; border-radius:3px 3px 0 0; min-height:2px; }
+  .hist-bar.in-band{ background:var(--accent); }
+  .hist-count{ font-size:11px; margin-top:2px; }
+  .hist-label{ font-size:10px; color:var(--muted); white-space:nowrap; position:absolute; top:100%; margin-top:14px; transform:rotate(-40deg); transform-origin:top left; }
+  .drilldown{ margin-top:12px; border-top:1px solid var(--border); padding-top:12px; }
+  .drilldown-controls{ display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; font-size:12.5px; }
+  .drilldown-scroll{ overflow:auto; max-height:480px; }
+  .flagged-row{ background:#fff8f0; }
+  .flag-blq{ background:#fff3e0; color:#b26a00; padding:1px 5px; border-radius:4px; font-size:11.5px; }
+  .flag-nr{ background:#eceff1; color:#455a64; padding:1px 5px; border-radius:4px; font-size:11.5px; }
+  .flag-error{ background:var(--fail-bg); color:var(--fail-text); padding:1px 5px; border-radius:4px; font-size:11.5px; }
+  .flag-empty, .flag-na{ color:var(--muted); }
+  .tag-pill{ background:#eef1f5; border-radius:4px; padding:1px 6px; font-size:11.5px; margin-right:2px; display:inline-block; }
+  .tag-pill.cat-First-run{ background:#eef1f5; }
+  .tag-pill.cat-Rerun{ background:#e8eefc; }
+  .tag-pill.cat-Duplicate{ background:#fef6e0; }
+  .tag-pill.cat-Pool-plasma{ background:#f3e8fc; }
+  .info-dot{ color:var(--warn-text); cursor:help; font-size:12px; }
+  .warning{ background:var(--warn-bg); border:1px solid #f0c36d; color:var(--warn-text); padding:8px 10px; border-radius:6px; font-size:13px; margin:8px 0; }
+  .form-grid{ display:grid; grid-template-columns:1fr 1fr; gap:14px; max-width:700px; }
+  .form-field label{ display:block; font-size:12.5px; font-weight:600; margin-bottom:4px; }
+  .row{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .batches-box{ border:1px solid var(--border); border-radius:8px; padding:12px; background:#fff; max-width:520px; }
+  .batch-chip{ display:inline-block; background:#eef1f5; border-radius:12px; padding:3px 10px; font-size:12.5px; margin:2px 4px 2px 0; }
+  .classify-table td, .classify-table th{ font-size:12px; }
+  .side-box{ border:1px solid var(--border); border-radius:8px; padding:10px; flex:1; min-width:220px; max-height:220px; overflow:auto; }
+  .side-box label{ display:block; font-size:12.5px; margin:2px 0; }
+  .step-gate{ opacity:0.5; pointer-events:none; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Rerun Sample QC Dashboard</h1>
+  <nav>
+    <button class="nav-btn active" data-nav="setup">Reference Panel</button>
+    <button class="nav-btn" data-nav="paste">Add Sample Columns</button>
+    <button class="nav-btn" data-nav="runs">Runs &amp; Grouping</button>
+    <button class="nav-btn" data-nav="summary">Summary &amp; Drilldown</button>
+  </nav>
+  <button id="assumptionsToggle" class="assumptions-toggle"></button>
+</header>
+
+<div id="assumptionsPanel" class="assumptions-panel hidden">
+  <strong>Unconfirmed assumptions in this build</strong> — each was built with a stated default, not yet confirmed with Xukun:
+  <ul id="assumptionsList"></ul>
+</div>
+
+<main>
+
+  <section data-view="setup" class="view active">
+    <h2>1 — Reference Panel</h2>
+    <p class="hint">Paste the protein/peptide panel once (tab-delimited: Measure Type, Biofluid/Location, Measure Identifier, Units, Protein, MYCO ID, PEPTIDE ID, Peptide, LLOQ, ULOQ — one row per line). Every later sample-column paste is values-only, aligned by row position to this table.</p>
+    <textarea id="refPanelInput" rows="6" placeholder="Protein&#9;Plasma&#9;Q8IZF2&#9;fmol/µL&#9;Adhesion G protein-coupled receptor F5&#9;M00000393&#9;M00000794&#9;DVIVHPLPLK&#9;1.4&#9;1630.5"></textarea>
+    <div class="row" style="margin-top:8px;">
+      <button id="parseRefPanelBtn">Parse &amp; Save (replace)</button>
+      <button id="loadDemoBtn" class="secondary">Load demo data</button>
+    </div>
+    <p id="refPanelCount" class="hint"></p>
+    <table id="refPanelTable"></table>
+    <button id="addRefRowBtn" class="link-btn" style="margin-top:6px;">+ Add blank row</button>
+  </section>
+
+  <section data-view="paste" class="view">
+    <h2>2 — Add Sample Columns</h2>
+    <p id="pasteFormDisabledNotice" class="warning hidden">Set up the reference panel first (Reference Panel tab) — sample values are aligned by row position to it.</p>
+
+    <h3 class="subhead">Batches</h3>
+    <p class="hint">Batches are created once and picked from a list afterward — no free-text batch field on every column.</p>
+    <div class="batches-box">
+      <div id="batchChips"></div>
+      <div class="row" style="margin-top:8px;">
+        <input type="text" id="newBatchNameInput" placeholder="New batch name, e.g. July 2026 3A" style="max-width:260px;">
+        <button id="addBatchBtn" class="secondary">Add batch</button>
+      </div>
+    </div>
+
+    <h3 class="subhead">Step A — paste the raw grid</h3>
+    <p class="hint">Paste a full tab-delimited block copied straight from the sheet — one line per peptide (same order as the reference panel), as many sample columns as you like in one go.</p>
+    <textarea id="gridPasteInput" rows="8" placeholder="BLQ&lt;1.4&#9;42.0&#9;39.5&#10;112.4&#9;205.3&#9;130.1"></textarea>
+    <p id="gridMismatchWarning" class="warning hidden"></p>
+    <button id="parseGridBtn">Parse columns</button>
+
+    <div id="classifyStep" class="hidden">
+      <h3 class="subhead">Step B — classify each column</h3>
+      <p class="hint">Every column needs a Sample ID, a category, and a batch. Rerun/Duplicate columns must link to the First-run column they belong to (from this paste or already saved).</p>
+      <div class="drilldown-scroll">
+        <table class="classify-table" id="classifyTable"></table>
+      </div>
+      <button id="saveClassifiedBtn" style="margin-top:10px;">Save all columns</button>
+      <button id="cancelClassifyBtn" class="secondary" style="margin-top:10px;">Cancel</button>
+    </div>
+    <p id="pasteResultMsg" class="hint hidden" style="margin-top:8px;"></p>
+  </section>
+
+  <section data-view="runs" class="view">
+    <h2>Sample Columns</h2>
+    <table id="sampleColumnsTable"></table>
+
+    <h2>Duplicate / VIP Groups (derived from links)</h2>
+    <table id="duplicateGroupsTable"></table>
+
+    <h2>Rerun Groups (derived from links)</h2>
+    <table id="rerunGroupsTable"></table>
+
+    <h2>Pool Plasma Comparisons</h2>
+    <p class="hint">Pool plasma is never auto-linked — pick which columns go on each side of a comparison. Create one comparison per pairing; never average across batches.</p>
+    <div class="row" style="align-items:flex-start;">
+      <div class="side-box">
+        <strong>Side A</strong>
+        <div id="sideAChecklist"></div>
+      </div>
+      <div class="side-box">
+        <strong>Side B</strong>
+        <div id="sideBChecklist"></div>
+      </div>
+    </div>
+    <div class="row" style="margin-top:8px;">
+      <input type="text" id="comparisonLabelInput" placeholder="Label, e.g. July 3A vs June 1A Plate 2" style="max-width:280px;">
+      <button id="createComparisonBtn">Create comparison</button>
+    </div>
+    <table id="comparisonsTable"></table>
+  </section>
+
+  <section data-view="summary" class="view">
+    <h2>Rerun Batch Overviews</h2>
+    <div id="rerunRollups"></div>
+
+    <h2>Duplicate / VIP Analyses</h2>
+    <div id="duplicateCards"></div>
+
+    <h2>Rerun Comparisons (per sample)</h2>
+    <div id="rerunCards"></div>
+
+    <h2>Pool Plasma Analyses</h2>
+    <div id="poolPlasmaCards"></div>
+  </section>
+
+</main>
+
+<script src="calc.js"></script>
+<script>
+'use strict';
+
+// ---------------------------------------------------------------------
+// State + persistence
+// ---------------------------------------------------------------------
+
+const LS_KEYS = {
+  referencePanel: 'qc.referencePanel.v2',
+  batches: 'qc.batches.v1',
+  sampleColumns: 'qc.sampleColumns.v2',
+  poolPlasmaComparisons: 'qc.poolPlasmaComparisons.v1'
+};
+
+const REF_FIELDS = ['measureType', 'biofluid', 'measureIdentifier', 'units', 'protein', 'mycoId', 'peptideId', 'peptide', 'lloq', 'uloq'];
+const REF_HEADERS = ['Measure Type', 'Biofluid/Location', 'Measure Identifier', 'Units', 'Protein', 'MYCO ID', 'PEPTIDE ID', 'Peptide', 'LLOQ', 'ULOQ'];
+
+const RECOMMENDATION_LABEL = {
+  'use-first-run': 'Use FIRST-RUN data for reporting (rerun marked research-only).',
+  'use-rerun': 'Use RERUN data for reporting (reproducibility confirmed via inter-run agreement).',
+  'escalate-vendor': 'Escalate to vendor — recommend full batch rerun.'
+};
+
+function loadState() {
+  const refRaw = localStorage.getItem(LS_KEYS.referencePanel);
+  const batchesRaw = localStorage.getItem(LS_KEYS.batches);
+  const colsRaw = localStorage.getItem(LS_KEYS.sampleColumns);
+  const compRaw = localStorage.getItem(LS_KEYS.poolPlasmaComparisons);
+  return {
+    referencePanel: refRaw ? JSON.parse(refRaw) : { version: 2, updatedAt: null, rows: [] },
+    batches: batchesRaw ? JSON.parse(batchesRaw) : [],
+    sampleColumns: colsRaw ? JSON.parse(colsRaw) : [],
+    poolPlasmaComparisons: compRaw ? JSON.parse(compRaw) : []
+  };
+}
+function saveReferencePanel() { localStorage.setItem(LS_KEYS.referencePanel, JSON.stringify(state.referencePanel)); }
+function saveBatches() { localStorage.setItem(LS_KEYS.batches, JSON.stringify(state.batches)); }
+function saveSampleColumns() { localStorage.setItem(LS_KEYS.sampleColumns, JSON.stringify(state.sampleColumns)); }
+function saveComparisons() { localStorage.setItem(LS_KEYS.poolPlasmaComparisons, JSON.stringify(state.poolPlasmaComparisons)); }
+
+let state = loadState();
+const uiState = { expanded: new Set(), drilldown: {} };
+
+// Transient (not persisted) bulk-paste-in-progress state.
+let pendingGrid = null;           // { columnCount, rawColumns: ParsedValue[][] }
+let pendingClassifications = [];  // [{ sampleId, category, vip, batchId, linkedFirstRunColumnId }]
+
+function uid(prefix) { return prefix + '_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
+function getColumn(id) { return state.sampleColumns.find(function (c) { return c.id === id; }); }
+function getBatch(id) { return state.batches.find(function (b) { return b.id === id; }); }
+function batchName(id) { const b = getBatch(id); return b ? b.name : '(no batch)'; }
+
+// ---------------------------------------------------------------------
+// Small render helpers
+// ---------------------------------------------------------------------
+
+function escapeHtml(str) {
+  return String(str == null ? '' : str).replace(/[&<>"']/g, function (ch) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch];
+  });
+}
+function escapeAttr(str) { return escapeHtml(str); }
+function formatNum(x, decimals) {
+  decimals = decimals == null ? 1 : decimals;
+  if (x == null || !Number.isFinite(x)) return '—';
+  return Number(x).toFixed(decimals);
+}
+function formatParsedValue(pv) {
+  if (!pv || pv.kind === 'empty') return '<span class="flag-empty">—</span>';
+  if (pv.kind === 'numeric') return formatNum(pv.value, 2);
+  if (pv.kind === 'blq') return '<span class="flag-blq">BLQ' + (pv.blqLimit != null ? '&lt;' + pv.blqLimit : '') + '</span>';
+  if (pv.kind === 'nr') return '<span class="flag-nr">NR</span>';
+  return '<span class="flag-error">' + escapeHtml(pv.raw || 'ERR') + '</span>';
+}
+function formatReplicates(list) { return (list || []).map(formatParsedValue).join(' / '); }
+function assumptionText(id) {
+  const a = Calc.ASSUMPTIONS.find(function (x) { return x.id === id; });
+  return a ? a.text : '';
+}
+function infoDot(id) { return '<span class="info-dot" title="' + escapeAttr(assumptionText(id)) + '">ⓘ</span>'; }
+function vipBadge(hasVip) { return hasVip ? '<span class="badge-vip">VIP</span>' : ''; }
+
+function renderCountsTable(rows) {
+  return '<table class="counts-table"><tbody>' + rows.map(function (r) {
+    return '<tr><td>' + r.label + '</td><td>' + r.value + '</td></tr>';
+  }).join('') + '</tbody></table>';
+}
+function renderHistogram(buckets) {
+  const values = Calc.RATIO_BUCKETS.map(function (b) { return buckets[b.label] || 0; });
+  const max = Math.max.apply(null, [1].concat(values));
+  const inBandLabels = ['0.8-0.9', '0.9-1.0', '1.0-1.1', '1.1-1.2'];
+  return '<div class="histogram">' + Calc.RATIO_BUCKETS.map(function (b) {
+    const count = buckets[b.label] || 0;
+    const heightPct = Math.max(2, Math.round((count / max) * 100));
+    const inBand = inBandLabels.indexOf(b.label) !== -1;
+    return '<div class="hist-bar-wrap"><div class="hist-bar' + (inBand ? ' in-band' : '') + '" style="height:' + heightPct + '%"></div>' +
+      '<div class="hist-count">' + count + '</div><div class="hist-label">' + b.label + '</div></div>';
+  }).join('') + '</div>';
+}
+function renderCardShell(opts) {
+  const expanded = uiState.expanded.has(opts.id);
+  return '<div class="card">' +
+    '<div class="card-header">' +
+      '<div><h3>' + opts.title + '</h3>' + (opts.subtitle ? '<div class="card-subtitle">' + opts.subtitle + '</div>' : '') + '</div>' +
+      '<span class="badge badge-' + (opts.verdict === 'PASS' ? 'pass' : 'fail') + '">' + opts.verdict + '</span>' +
+    '</div>' +
+    (opts.extraFlagsHtml ? '<div class="flag-pills">' + opts.extraFlagsHtml + '</div>' : '') +
+    (opts.sentence ? '<p class="card-sentence">' + opts.sentence + '</p>' : '') +
+    (opts.recommendationHtml || '') +
+    (opts.countsHtml || '') +
+    (opts.histogramHtml || '') +
+    '<button class="link-btn" onclick="toggleExpand(\'' + opts.id + '\')">' + (expanded ? '▲ Hide details' : '▼ Show details') + '</button>' +
+    (expanded ? '<div class="drilldown">' + opts.drilldownHtml + '</div>' : '') +
+  '</div>';
+}
+
+// ---------------------------------------------------------------------
+// Drilldown table (shared by all 3 analysis types)
+// ---------------------------------------------------------------------
+
+function renderDrilldownTable(cardId, rows, columns, isFlaggedFn) {
+  const ui = uiState.drilldown[cardId] = uiState.drilldown[cardId] || { sortKey: null, sortDir: 1, flaggedOnly: false };
+  let displayRows = rows.slice();
+  if (ui.flaggedOnly) displayRows = displayRows.filter(isFlaggedFn);
+  if (ui.sortKey) {
+    const col = columns.find(function (c) { return c.key === ui.sortKey; });
+    displayRows.sort(function (a, b) {
+      const av = col.sortValue(a), bv = col.sortValue(b);
+      if (av == null && bv == null) return 0;
+      if (av == null) return 1;
+      if (bv == null) return -1;
+      if (av < bv) return -1 * ui.sortDir;
+      if (av > bv) return 1 * ui.sortDir;
+      return 0;
+    });
+  }
+  const headerHtml = columns.map(function (c) {
+    const arrow = ui.sortKey === c.key ? (ui.sortDir === 1 ? ' ▲' : ' ▼') : '';
+    return '<th onclick="sortDrilldown(\'' + cardId + '\',\'' + c.key + '\')">' + c.label + arrow + '</th>';
+  }).join('');
+  const rowsHtml = displayRows.map(function (row) {
+    const flagged = isFlaggedFn(row);
+    return '<tr class="' + (flagged ? 'flagged-row' : '') + '">' + columns.map(function (c) { return '<td>' + c.render(row) + '</td>'; }).join('') + '</tr>';
+  }).join('');
+  return '<div class="drilldown-controls"><label><input type="checkbox" ' + (ui.flaggedOnly ? 'checked' : '') + ' onchange="toggleFlaggedOnly(\'' + cardId + '\')"> Flagged rows only</label>' +
+    '<span class="hint">' + displayRows.length + '/' + rows.length + ' rows shown</span></div>' +
+    '<div class="drilldown-scroll"><table><thead><tr>' + headerHtml + '</tr></thead><tbody>' + rowsHtml + '</tbody></table></div>';
+}
+function sortDrilldown(cardId, key) {
+  const ui = uiState.drilldown[cardId] = uiState.drilldown[cardId] || { sortKey: null, sortDir: 1, flaggedOnly: false };
+  if (ui.sortKey === key) ui.sortDir *= -1; else { ui.sortKey = key; ui.sortDir = 1; }
+  renderSummary();
+}
+function toggleFlaggedOnly(cardId) {
+  const ui = uiState.drilldown[cardId] = uiState.drilldown[cardId] || { sortKey: null, sortDir: 1, flaggedOnly: false };
+  ui.flaggedOnly = !ui.flaggedOnly;
+  renderSummary();
+}
+function toggleExpand(cardId) {
+  if (uiState.expanded.has(cardId)) uiState.expanded.delete(cardId); else uiState.expanded.add(cardId);
+  renderSummary();
+}
+
+// ---------------------------------------------------------------------
+// Assumptions banner
+// ---------------------------------------------------------------------
+
+function renderAssumptionsBanner() {
+  document.getElementById('assumptionsToggle').textContent = '⚠ ' + Calc.ASSUMPTIONS.length + ' unconfirmed assumption(s) — click to review';
+  document.getElementById('assumptionsList').innerHTML = Calc.ASSUMPTIONS.map(function (a) {
+    return '<li id="assumption-' + a.id + '">' + escapeHtml(a.text) + '</li>';
+  }).join('');
+}
+function toggleAssumptionsPanel() { document.getElementById('assumptionsPanel').classList.toggle('hidden'); }
+
+// ---------------------------------------------------------------------
+// Reference panel view
+// ---------------------------------------------------------------------
+
+function renderReferencePanelView() {
+  const rows = state.referencePanel.rows;
+  const tbody = rows.map(function (r, i) {
+    return '<tr>' +
+      REF_FIELDS.slice(0, 8).map(function (f) {
+        return '<td><input type="text" data-row="' + i + '" data-field="' + f + '" value="' + escapeAttr(r[f] || '') + '"></td>';
+      }).join('') +
+      ['lloq', 'uloq'].map(function (f) {
+        return '<td><input type="text" class="num-input" data-row="' + i + '" data-field="' + f + '" value="' + (r[f] != null ? r[f] : '') + '"></td>';
+      }).join('') +
+      '<td><button data-action="delete-row" data-row="' + i + '" class="link-btn danger">Delete</button></td>' +
+    '</tr>';
+  }).join('');
+  document.getElementById('refPanelTable').innerHTML =
+    '<thead><tr>' + REF_HEADERS.map(function (h) { return '<th>' + h + '</th>'; }).join('') + '<th></th></tr></thead><tbody>' +
+    (tbody || '<tr><td colspan="11" class="hint">No reference panel yet — paste one above.</td></tr>') + '</tbody>';
+  document.getElementById('refPanelCount').textContent = rows.length + ' row(s)' +
+    (state.referencePanel.updatedAt ? ' · last updated ' + new Date(state.referencePanel.updatedAt).toLocaleString() : '');
+}
+
+function handleParseReferencePanel() {
+  const raw = document.getElementById('refPanelInput').value;
+  const lines = raw.split(/\r?\n/).filter(function (l) { return l.trim() !== ''; });
+  if (lines.length === 0) { alert('Paste at least one row first.'); return; }
+  if (state.sampleColumns.length > 0) {
+    const ok = confirm('You already have ' + state.sampleColumns.length + ' pasted sample column(s). Replacing the reference panel changes the row order/positions those columns are aligned to, and can silently misalign existing data. Continue?');
+    if (!ok) return;
+  }
+  const rows = lines.map(function (line) {
+    const parts = line.indexOf('\t') !== -1 ? line.split('\t') : line.split(',');
+    const row = {};
+    REF_FIELDS.forEach(function (f, i) { row[f] = (parts[i] || '').trim(); });
+    row.lloq = row.lloq !== '' ? Number(row.lloq) : null;
+    row.uloq = row.uloq !== '' ? Number(row.uloq) : null;
+    return row;
+  });
+  state.referencePanel = { version: 2, updatedAt: new Date().toISOString(), rows: rows };
+  saveReferencePanel();
+  document.getElementById('refPanelInput').value = '';
+  renderReferencePanelView();
+  renderPasteView();
+}
+
+function handleAddRefRow() {
+  if (state.sampleColumns.length > 0) {
+    const ok = confirm('Adding a row changes the row count that existing sample columns are aligned to. Continue?');
+    if (!ok) return;
+  }
+  const row = {};
+  REF_FIELDS.forEach(function (f) { row[f] = (f === 'lloq' || f === 'uloq') ? null : ''; });
+  state.referencePanel.rows.push(row);
+  state.referencePanel.updatedAt = new Date().toISOString();
+  saveReferencePanel();
+  renderReferencePanelView();
+  renderPasteView();
+}
+
+function handleRefPanelTableClick(e) {
+  const btn = e.target.closest('button[data-action="delete-row"]');
+  if (!btn) return;
+  const idx = Number(btn.getAttribute('data-row'));
+  if (state.sampleColumns.length > 0) {
+    const ok = confirm('Deleting this row shifts every later row\'s position and will misalign existing pasted sample columns. Continue?');
+    if (!ok) return;
+  }
+  state.referencePanel.rows.splice(idx, 1);
+  state.referencePanel.updatedAt = new Date().toISOString();
+  saveReferencePanel();
+  renderReferencePanelView();
+  renderPasteView();
+}
+
+function handleRefPanelCellEdit(e) {
+  const input = e.target;
+  if (!input.matches('input[data-field]')) return;
+  const idx = Number(input.getAttribute('data-row'));
+  const field = input.getAttribute('data-field');
+  const row = state.referencePanel.rows[idx];
+  if (!row) return;
+  if (field === 'lloq' || field === 'uloq') {
+    const trimmed = input.value.trim();
+    const num = Number(trimmed);
+    row[field] = trimmed === '' ? null : (Number.isFinite(num) ? num : row[field]);
+  } else {
+    row[field] = input.value;
+  }
+  state.referencePanel.updatedAt = new Date().toISOString();
+  saveReferencePanel();
+}
+
+function handleLoadDemoData() {
+  const ok = confirm('Load demo data? This replaces the reference panel and adds a handful of demo sample columns alongside anything already pasted. Reference rows are real panel entries; sample values are illustrative, not Xukun\'s actual data.');
+  if (!ok) return;
+
+  state.referencePanel = {
+    version: 2, updatedAt: new Date().toISOString(),
+    rows: [
+      { measureType: 'Protein', biofluid: 'Plasma', measureIdentifier: 'Q8IZF2', units: 'fmol/µL', protein: 'Adhesion G protein-coupled receptor F5', mycoId: 'M00000393', peptideId: 'M00000794', peptide: 'DVIVHPLPLK', lloq: 1.4, uloq: 1630.5 },
+      { measureType: 'Protein', biofluid: 'Plasma', measureIdentifier: 'Q9HDC9', units: 'fmol/µL', protein: 'Adipocyte plasma membrane-associated protein', mycoId: 'M00000396', peptideId: 'M00000798', peptide: 'LLEYDTVTR', lloq: 7.3, uloq: 8295.1 },
+      { measureType: 'Protein', biofluid: 'Plasma', measureIdentifier: 'P02763', units: 'fmol/µL', protein: 'Alpha-1-acid glycoprotein 1', mycoId: 'M00000385', peptideId: 'M00000698', peptide: 'NWGLSVYADKPETTK', lloq: 143.9, uloq: 139700 },
+      { measureType: 'Protein', biofluid: 'Plasma', measureIdentifier: 'P01011', units: 'fmol/µL', protein: 'Alpha-1-antichymotrypsin', mycoId: 'M00000357', peptideId: 'M00000668', peptide: 'EIGELYLPK', lloq: 91.7, uloq: 39833 }
+    ]
+  };
+  saveReferencePanel();
+
+  if (state.batches.length === 0) {
+    state.batches = [
+      { id: uid('batch'), name: 'June 1A 2026_Plate 2', createdAt: new Date().toISOString() },
+      { id: uid('batch'), name: 'July 2026 3A', createdAt: new Date().toISOString() }
+    ];
+    saveBatches();
+  }
+  const juneBatch = state.batches[0], julyBatch = state.batches[1] || state.batches[0];
+
+  const firstRun228 = { id: uid('col'), sampleId: 'P1-228G789', category: 'First-run', vip: false, batchId: juneBatch.id, linkedFirstRunColumnId: null, pastedAt: new Date().toISOString(),
+    values: [Calc.parseValue('BLQ<1.507'), Calc.parseValue('13.53'), Calc.parseValue('2997.8'), Calc.parseValue('2015')] };
+  const dup228 = { id: uid('col'), sampleId: 'P4A-228G789', category: 'Duplicate', vip: false, batchId: julyBatch.id, linkedFirstRunColumnId: firstRun228.id, pastedAt: new Date().toISOString(),
+    values: [Calc.parseValue('BLQ<1.357'), Calc.parseValue('9.24'), Calc.parseValue('2146.4'), Calc.parseValue('1357.6')] };
+
+  const firstRun473 = { id: uid('col'), sampleId: 'P1-473G835', category: 'First-run', vip: false, batchId: juneBatch.id, linkedFirstRunColumnId: null, pastedAt: new Date().toISOString(),
+    values: [Calc.parseValue('42.0'), Calc.parseValue('205.3'), Calc.parseValue('4711.8'), Calc.parseValue('2525.4')] };
+  const rerun473a = { id: uid('col'), sampleId: 'P1-473G835', category: 'Rerun', vip: false, batchId: julyBatch.id, linkedFirstRunColumnId: firstRun473.id, pastedAt: new Date().toISOString(),
+    values: [Calc.parseValue('39.5'), Calc.parseValue('130.1'), Calc.parseValue('5000'), Calc.parseValue('2750')] };
+  const rerun473b = { id: uid('col'), sampleId: 'P1-473G835', category: 'Rerun', vip: false, batchId: julyBatch.id, linkedFirstRunColumnId: firstRun473.id, pastedAt: new Date().toISOString(),
+    values: [Calc.parseValue('41.2'), Calc.parseValue('160.0'), Calc.parseValue('4326.4'), Calc.parseValue('2344.2')] };
+
+  const firstRunVip = { id: uid('col'), sampleId: 'P1-482M788', category: 'First-run', vip: true, batchId: julyBatch.id, linkedFirstRunColumnId: null, pastedAt: new Date().toISOString(),
+    values: [Calc.parseValue('1.44'), Calc.parseValue('9.24'), Calc.parseValue('2200.2'), Calc.parseValue('1736.8')] };
+  const dupVip = { id: uid('col'), sampleId: 'P1-482M788', category: 'Duplicate', vip: true, batchId: julyBatch.id, linkedFirstRunColumnId: firstRunVip.id, pastedAt: new Date().toISOString(),
+    values: [Calc.parseValue('1.49'), Calc.parseValue('9.83'), Calc.parseValue('2286'), Calc.parseValue('2172.9')] };
+
+  const poolJuneA = { id: uid('col'), sampleId: 'POOL-R03', category: 'Pool plasma', vip: false, batchId: juneBatch.id, linkedFirstRunColumnId: null, pastedAt: new Date().toISOString(),
+    values: [Calc.parseValue('BLQ<1.507'), Calc.parseValue('7.61'), Calc.parseValue('3339.2'), Calc.parseValue('2891.75')] };
+  const poolJuneB = { id: uid('col'), sampleId: 'POOL-R04', category: 'Pool plasma', vip: false, batchId: juneBatch.id, linkedFirstRunColumnId: null, pastedAt: new Date().toISOString(),
+    values: [Calc.parseValue('BLQ<1.507'), Calc.parseValue('7.52'), Calc.parseValue('3402.7'), Calc.parseValue('2503.6')] };
+  const poolJulyA = { id: uid('col'), sampleId: 'POOL-R01', category: 'Pool plasma', vip: false, batchId: julyBatch.id, linkedFirstRunColumnId: null, pastedAt: new Date().toISOString(),
+    values: [Calc.parseValue('BLQ<1.357'), Calc.parseValue('13.53'), Calc.parseValue('3130.1'), Calc.parseValue('2359.8')] };
+  const poolJulyB = { id: uid('col'), sampleId: 'POOL-R02', category: 'Pool plasma', vip: false, batchId: julyBatch.id, linkedFirstRunColumnId: null, pastedAt: new Date().toISOString(),
+    values: [Calc.parseValue('BLQ<1.357'), Calc.parseValue('9.24'), Calc.parseValue('3093.9'), Calc.parseValue('2750.3')] };
+
+  state.sampleColumns = state.sampleColumns.concat([
+    firstRun228, dup228, firstRun473, rerun473a, rerun473b, firstRunVip, dupVip, poolJuneA, poolJuneB, poolJulyA, poolJulyB
+  ]);
+  saveSampleColumns();
+
+  state.poolPlasmaComparisons.push({
+    id: uid('cmp'), label: julyBatch.name + ' pool plasma vs ' + juneBatch.name + ' pool plasma',
+    sideAColumnIds: [poolJulyA.id, poolJulyB.id], sideBColumnIds: [poolJuneA.id, poolJuneB.id],
+    createdAt: new Date().toISOString()
+  });
+  saveComparisons();
+
+  renderReferencePanelView();
+  renderPasteView();
+  renderRunsView();
+  renderSummary();
+  switchView('summary');
+}
+
+// ---------------------------------------------------------------------
+// Batches
+// ---------------------------------------------------------------------
+
+function renderBatchChips() {
+  document.getElementById('batchChips').innerHTML = state.batches.length
+    ? state.batches.map(function (b) { return '<span class="batch-chip">' + escapeHtml(b.name) + '</span>'; }).join('')
+    : '<span class="hint">No batches yet — add one below.</span>';
+}
+function handleAddBatch() {
+  const input = document.getElementById('newBatchNameInput');
+  const name = input.value.trim();
+  if (!name) { alert('Batch name is required.'); return; }
+  state.batches.push({ id: uid('batch'), name: name, createdAt: new Date().toISOString() });
+  saveBatches();
+  input.value = '';
+  renderBatchChips();
+  renderClassifyStep();
+}
+function batchOptionsHtml(selectedId) {
+  return '<option value="">— choose —</option>' + state.batches.map(function (b) {
+    return '<option value="' + b.id + '"' + (b.id === selectedId ? ' selected' : '') + '>' + escapeHtml(b.name) + '</option>';
+  }).join('');
+}
+
+// ---------------------------------------------------------------------
+// Paste view: bulk grid + classify
+// ---------------------------------------------------------------------
+
+function renderPasteView() {
+  const disabled = state.referencePanel.rows.length === 0;
+  document.getElementById('pasteFormDisabledNotice').classList.toggle('hidden', !disabled);
+  document.getElementById('parseGridBtn').disabled = disabled;
+  renderBatchChips();
+  updateGridMismatchWarning();
+}
+
+function updateGridMismatchWarning() {
+  const lines = document.getElementById('gridPasteInput').value.split(/\r?\n/).filter(function (l) { return l !== ''; });
+  const expected = state.referencePanel.rows.length;
+  const warningEl = document.getElementById('gridMismatchWarning');
+  if (lines.length === 0) { warningEl.classList.add('hidden'); return; }
+  if (lines.length !== expected) {
+    warningEl.textContent = 'Pasted ' + lines.length + ' line(s), but the reference panel has ' + expected + ' row(s). Missing rows are treated as empty; extra rows are dropped. You can still parse.';
+    warningEl.classList.remove('hidden');
+  } else {
+    warningEl.classList.add('hidden');
+  }
+}
+
+function handleParseGrid() {
+  if (state.referencePanel.rows.length === 0) { alert('Set up the reference panel first.'); return; }
+  let lines = document.getElementById('gridPasteInput').value.split(/\r?\n/);
+  if (lines.length > 0 && lines[lines.length - 1] === '') lines.pop();
+  if (lines.length === 0) { alert('Paste a grid first.'); return; }
+
+  const expected = state.referencePanel.rows.length;
+  while (lines.length < expected) lines.push('');
+  if (lines.length > expected) lines = lines.slice(0, expected);
+
+  const splitLines = lines.map(function (l) { return l.split('\t'); });
+  const columnCount = Math.max.apply(null, splitLines.map(function (cells) { return cells.length; }));
+
+  const rawColumns = [];
+  for (let c = 0; c < columnCount; c++) {
+    rawColumns.push(splitLines.map(function (cells) { return Calc.parseValue(cells[c] != null ? cells[c] : ''); }));
+  }
+
+  pendingGrid = { columnCount: columnCount, rawColumns: rawColumns };
+  pendingClassifications = [];
+  for (let c = 0; c < columnCount; c++) {
+    pendingClassifications.push({ sampleId: '', category: 'First-run', vip: false, batchId: '', linkedFirstRunColumnId: '' });
+  }
+  renderClassifyStep();
+}
+
+function firstRunOptionsHtml(excludeIndex, selectedValue) {
+  const options = ['<option value="">— choose —</option>'];
+  state.sampleColumns.filter(function (c) { return c.category === 'First-run'; }).forEach(function (c) {
+    const label = c.sampleId + ' (' + batchName(c.batchId) + ') — saved';
+    options.push('<option value="saved:' + c.id + '"' + (('saved:' + c.id) === selectedValue ? ' selected' : '') + '>' + escapeHtml(label) + '</option>');
+  });
+  pendingClassifications.forEach(function (pc, i) {
+    if (i === excludeIndex || pc.category !== 'First-run') return;
+    const label = '(this paste, col ' + (i + 1) + ') ' + (pc.sampleId || 'unnamed');
+    options.push('<option value="pending:' + i + '"' + (('pending:' + i) === selectedValue ? ' selected' : '') + '>' + escapeHtml(label) + '</option>');
+  });
+  return options.join('');
+}
+
+function renderClassifyStep() {
+  const stepEl = document.getElementById('classifyStep');
+  if (!pendingGrid) { stepEl.classList.add('hidden'); return; }
+  stepEl.classList.remove('hidden');
+
+  const rowsHtml = pendingClassifications.map(function (pc, i) {
+    const preview = formatReplicates(pendingGrid.rawColumns[i].slice(0, 2));
+    const needsLink = pc.category === 'Rerun' || pc.category === 'Duplicate';
+    return '<tr data-pending-index="' + i + '">' +
+      '<td>col ' + (i + 1) + '<br><span class="hint">' + preview + '…</span></td>' +
+      '<td><input type="text" data-pfield="sampleId" data-pi="' + i + '" value="' + escapeAttr(pc.sampleId) + '" style="width:110px;"></td>' +
+      '<td><select data-pfield="category" data-pi="' + i + '">' + Calc.CATEGORY_VOCABULARY.map(function (cat) {
+        return '<option value="' + cat + '"' + (cat === pc.category ? ' selected' : '') + '>' + cat + '</option>';
+      }).join('') + '</select></td>' +
+      '<td><input type="checkbox" data-pfield="vip" data-pi="' + i + '" ' + (pc.vip ? 'checked' : '') + '></td>' +
+      '<td><select data-pfield="batchId" data-pi="' + i + '">' + batchOptionsHtml(pc.batchId) + '</select></td>' +
+      '<td>' + (needsLink ? '<select data-pfield="linkedFirstRunColumnId" data-pi="' + i + '">' + firstRunOptionsHtml(i, pc.linkedFirstRunColumnId) + '</select>' : '<span class="hint">—</span>') + '</td>' +
+      '<td><button data-action="remove-pending" data-pi="' + i + '" class="link-btn danger">Remove</button></td>' +
+    '</tr>';
+  }).join('');
+
+  document.getElementById('classifyTable').innerHTML =
+    '<thead><tr><th>Preview</th><th>Sample ID</th><th>Category</th><th>VIP</th><th>Batch</th><th>Linked to (First-run)</th><th></th></tr></thead><tbody>' + rowsHtml + '</tbody>';
+}
+
+function handleClassifyTableChange(e) {
+  const el = e.target;
+  const field = el.getAttribute('data-pfield');
+  if (!field) return;
+  const i = Number(el.getAttribute('data-pi'));
+  const pc = pendingClassifications[i];
+  if (!pc) return;
+  if (field === 'vip') pc.vip = el.checked;
+  else pc[field] = el.value;
+  // Category changes affect which columns are valid link targets, and switching
+  // away from Rerun/Duplicate clears a now-irrelevant link — always re-render.
+  if (field === 'category' && pc.category !== 'Rerun' && pc.category !== 'Duplicate') pc.linkedFirstRunColumnId = '';
+  renderClassifyStep();
+}
+
+function handleClassifyTableClick(e) {
+  const btn = e.target.closest('button[data-action="remove-pending"]');
+  if (!btn) return;
+  const i = Number(btn.getAttribute('data-pi'));
+  pendingGrid.rawColumns.splice(i, 1);
+  pendingGrid.columnCount--;
+  pendingClassifications.splice(i, 1);
+  if (pendingGrid.columnCount === 0) { pendingGrid = null; pendingClassifications = []; }
+  renderClassifyStep();
+}
+
+function handleCancelClassify() {
+  pendingGrid = null;
+  pendingClassifications = [];
+  document.getElementById('gridPasteInput').value = '';
+  renderClassifyStep();
+  updateGridMismatchWarning();
+}
+
+function handleSaveClassified() {
+  for (let i = 0; i < pendingClassifications.length; i++) {
+    const pc = pendingClassifications[i];
+    if (!pc.sampleId.trim()) { alert('Column ' + (i + 1) + ' is missing a Sample ID.'); return; }
+    if (!pc.batchId) { alert('Column ' + (i + 1) + ' (' + pc.sampleId + ') is missing a batch.'); return; }
+    if ((pc.category === 'Rerun' || pc.category === 'Duplicate') && !pc.linkedFirstRunColumnId) {
+      alert('Column ' + (i + 1) + ' (' + pc.sampleId + ') is tagged ' + pc.category + ' and must be linked to a First-run column.'); return;
+    }
+  }
+
+  // Pass 1: create First-run columns first, so Rerun/Duplicate columns in the same
+  // paste can resolve a "pending:N" link to a real column id.
+  const pendingIndexToRealId = {};
+  pendingClassifications.forEach(function (pc, i) {
+    if (pc.category !== 'First-run') return;
+    const col = {
+      id: uid('col'), sampleId: pc.sampleId.trim(), category: 'First-run', vip: pc.vip,
+      batchId: pc.batchId, linkedFirstRunColumnId: null, values: pendingGrid.rawColumns[i], pastedAt: new Date().toISOString()
+    };
+    state.sampleColumns.push(col);
+    pendingIndexToRealId[i] = col.id;
+  });
+
+  // Pass 2: create everything else, resolving links.
+  pendingClassifications.forEach(function (pc, i) {
+    if (pc.category === 'First-run') return;
+    let linkedId = null;
+    if (pc.category === 'Rerun' || pc.category === 'Duplicate') {
+      if (pc.linkedFirstRunColumnId.indexOf('saved:') === 0) linkedId = pc.linkedFirstRunColumnId.slice('saved:'.length);
+      else if (pc.linkedFirstRunColumnId.indexOf('pending:') === 0) linkedId = pendingIndexToRealId[Number(pc.linkedFirstRunColumnId.slice('pending:'.length))];
+    }
+    const col = {
+      id: uid('col'), sampleId: pc.sampleId.trim(), category: pc.category, vip: pc.vip,
+      batchId: pc.batchId, linkedFirstRunColumnId: linkedId, values: pendingGrid.rawColumns[i], pastedAt: new Date().toISOString()
+    };
+    state.sampleColumns.push(col);
+  });
+
+  saveSampleColumns();
+  const savedCount = pendingClassifications.length;
+  pendingGrid = null;
+  pendingClassifications = [];
+  document.getElementById('gridPasteInput').value = '';
+  renderClassifyStep();
+  updateGridMismatchWarning();
+
+  const msgEl = document.getElementById('pasteResultMsg');
+  msgEl.textContent = 'Saved ' + savedCount + ' column(s).';
+  msgEl.classList.remove('hidden');
+
+  renderRunsView();
+  renderSummary();
+}
+
+// ---------------------------------------------------------------------
+// Runs & Grouping view
+// ---------------------------------------------------------------------
+
+function renderRunsView() {
+  renderSampleColumnsTable();
+  renderDerivedGroupsTable('Duplicate', 'duplicateGroupsTable');
+  renderDerivedGroupsTable('Rerun', 'rerunGroupsTable');
+  renderComparisonChecklists();
+  renderComparisonsTable();
+}
+
+function renderSampleColumnsTable() {
+  const rowsHtml = state.sampleColumns.map(function (c) {
+    const canonical = Calc.matchBarcode(c.sampleId).canonical;
+    const validCount = c.values.filter(function (v) { return !Calc.isExcluded(v); }).length;
+    const linked = c.linkedFirstRunColumnId ? getColumn(c.linkedFirstRunColumnId) : null;
+    return '<tr>' +
+      '<td>' + escapeHtml(c.sampleId) + (c.category !== 'First-run' ? '' : '') + '</td>' +
+      '<td>' + escapeHtml(canonical) + '</td>' +
+      '<td><span class="tag-pill cat-' + c.category.replace(' ', '-') + '">' + c.category + '</span>' + vipBadge(c.vip) + '</td>' +
+      '<td>' + escapeHtml(batchName(c.batchId)) + '</td>' +
+      '<td>' + (linked ? escapeHtml(linked.sampleId) : '—') + '</td>' +
+      '<td>' + validCount + '/' + c.values.length + '</td>' +
+      '<td><button data-action="delete-col" data-id="' + c.id + '" class="link-btn danger">Delete</button></td>' +
+    '</tr>';
+  }).join('');
+  document.getElementById('sampleColumnsTable').innerHTML =
+    '<thead><tr><th>Sample ID</th><th>Canonical</th><th>Category</th><th>Batch</th><th>Linked to</th><th>Valid/Total</th><th></th></tr></thead><tbody>' +
+    (rowsHtml || '<tr><td colspan="7" class="hint">No sample columns pasted yet.</td></tr>') + '</tbody>';
+}
+
+function handleSampleColumnsTableClick(e) {
+  const btn = e.target.closest('button[data-action="delete-col"]');
+  if (!btn) return;
+  const id = btn.getAttribute('data-id');
+  const dependents = state.sampleColumns.filter(function (c) { return c.linkedFirstRunColumnId === id; });
+  if (dependents.length > 0) {
+    const ok = confirm('This column is linked to by ' + dependents.length + ' other column(s) (Rerun/Duplicate). Deleting it will leave those unlinked. Continue?');
+    if (!ok) return;
+  }
+  state.sampleColumns = state.sampleColumns.filter(function (c) { return c.id !== id; });
+  state.sampleColumns.forEach(function (c) { if (c.linkedFirstRunColumnId === id) c.linkedFirstRunColumnId = null; });
+  saveSampleColumns();
+  state.poolPlasmaComparisons = state.poolPlasmaComparisons.filter(function (cmp) {
+    return cmp.sideAColumnIds.indexOf(id) === -1 && cmp.sideBColumnIds.indexOf(id) === -1;
+  });
+  saveComparisons();
+  renderRunsView();
+  renderSummary();
+}
+
+/**
+ * Groups columns of a given category (Duplicate|Rerun) by which First-run column
+ * they link to. Grouping is fully derived — there's no separate "run" record to
+ * create or ungroup, since the link itself is the grouping.
+ */
+function derivedGroups(category) {
+  const groups = {};
+  state.sampleColumns.filter(function (c) { return c.category === category && c.linkedFirstRunColumnId; }).forEach(function (c) {
+    const key = c.linkedFirstRunColumnId;
+    if (!groups[key]) groups[key] = { anchor: getColumn(key), members: [] };
+    groups[key].members.push(c);
+  });
+  // Drop any group whose anchor no longer exists (deleted First-run column).
+  Object.keys(groups).forEach(function (key) { if (!groups[key].anchor) delete groups[key]; });
+  return groups;
+}
+
+function renderDerivedGroupsTable(category, containerId) {
+  const groups = derivedGroups(category);
+  const rowsHtml = Object.keys(groups).map(function (key) {
+    const g = groups[key];
+    return '<tr>' +
+      '<td>' + escapeHtml(g.anchor.sampleId) + vipBadge(g.anchor.vip || g.members.some(function (m) { return m.vip; })) + '</td>' +
+      '<td>' + escapeHtml(batchName(g.anchor.batchId)) + '</td>' +
+      '<td>' + g.members.map(function (m) { return escapeHtml(m.sampleId) + ' (' + escapeHtml(batchName(m.batchId)) + ')'; }).join(', ') + '</td>' +
+      '<td>' + g.members.length + '</td>' +
+    '</tr>';
+  }).join('');
+  document.getElementById(containerId).innerHTML =
+    '<thead><tr><th>First-run anchor</th><th>Anchor batch</th><th>' + category + ' member(s)</th><th># members</th></tr></thead><tbody>' +
+    (rowsHtml || '<tr><td colspan="4" class="hint">No ' + category.toLowerCase() + ' columns linked yet.</td></tr>') + '</tbody>';
+}
+
+function renderComparisonChecklists() {
+  const poolCols = state.sampleColumns.filter(function (c) { return c.category === 'Pool plasma'; });
+  function listHtml(side) {
+    return poolCols.length ? poolCols.map(function (c) {
+      return '<label><input type="checkbox" data-side="' + side + '" value="' + c.id + '"> ' + escapeHtml(c.sampleId) + ' (' + escapeHtml(batchName(c.batchId)) + ')</label>';
+    }).join('') : '<span class="hint">No Pool plasma columns yet.</span>';
+  }
+  document.getElementById('sideAChecklist').innerHTML = listHtml('A');
+  document.getElementById('sideBChecklist').innerHTML = listHtml('B');
+}
+
+function handleCreateComparison() {
+  const sideA = Array.from(document.querySelectorAll('input[data-side="A"]:checked')).map(function (cb) { return cb.value; });
+  const sideB = Array.from(document.querySelectorAll('input[data-side="B"]:checked')).map(function (cb) { return cb.value; });
+  if (sideA.length === 0 || sideB.length === 0) { alert('Pick at least one column on each side.'); return; }
+  const label = document.getElementById('comparisonLabelInput').value.trim() || 'Comparison ' + (state.poolPlasmaComparisons.length + 1);
+  state.poolPlasmaComparisons.push({ id: uid('cmp'), label: label, sideAColumnIds: sideA, sideBColumnIds: sideB, createdAt: new Date().toISOString() });
+  saveComparisons();
+  document.getElementById('comparisonLabelInput').value = '';
+  renderRunsView();
+  renderSummary();
+}
+
+function renderComparisonsTable() {
+  const rowsHtml = state.poolPlasmaComparisons.map(function (cmp) {
+    const sideA = cmp.sideAColumnIds.map(getColumn).filter(Boolean).map(function (c) { return c.sampleId; }).join(', ');
+    const sideB = cmp.sideBColumnIds.map(getColumn).filter(Boolean).map(function (c) { return c.sampleId; }).join(', ');
+    return '<tr>' +
+      '<td>' + escapeHtml(cmp.label) + '</td>' +
+      '<td>' + escapeHtml(sideA) + '</td>' +
+      '<td>' + escapeHtml(sideB) + '</td>' +
+      '<td><button data-action="delete-comparison" data-id="' + cmp.id + '" class="link-btn danger">Delete</button></td>' +
+    '</tr>';
+  }).join('');
+  document.getElementById('comparisonsTable').innerHTML =
+    '<thead><tr><th>Label</th><th>Side A</th><th>Side B</th><th></th></tr></thead><tbody>' +
+    (rowsHtml || '<tr><td colspan="4" class="hint">No comparisons created yet.</td></tr>') + '</tbody>';
+}
+
+function handleComparisonsTableClick(e) {
+  const btn = e.target.closest('button[data-action="delete-comparison"]');
+  if (!btn) return;
+  const id = btn.getAttribute('data-id');
+  state.poolPlasmaComparisons = state.poolPlasmaComparisons.filter(function (cmp) { return cmp.id !== id; });
+  saveComparisons();
+  renderRunsView();
+  renderSummary();
+}
+
+// ---------------------------------------------------------------------
+// Computing BatchResults from state (always derived, never persisted)
+// ---------------------------------------------------------------------
+
+function computeDuplicateResult(group) {
+  const cols = [group.anchor].concat(group.members);
+  const rows = state.referencePanel.rows.map(function (ref, i) {
+    return Object.assign({}, ref, { replicates: cols.map(function (c) { return c.values[i]; }) });
+  });
+  return Calc.duplicateAnalysis(rows);
+}
+
+function computeRerunResult(group) {
+  const rows = state.referencePanel.rows.map(function (ref, i) {
+    return Object.assign({}, ref, {
+      firstRun: [group.anchor.values[i]],
+      rerun: group.members.map(function (c) { return c.values[i]; })
+    });
+  });
+  const batchResult = Calc.rerunAnalysis(rows);
+  const decision = Calc.rerunDecision(batchResult.intraCounts, batchResult.interCounts, batchResult.ratioBuckets, []);
+  const validRatios = batchResult.perPeptide.map(function (p) { return p.ratio; }).filter(function (r) { return r != null; });
+  const sampleRatio = Calc.mean(validRatios);
+  return { anchor: group.anchor, members: group.members, batchResult: batchResult, decision: decision, sampleRatio: sampleRatio };
+}
+
+function computePoolPlasmaResult(comparison) {
+  const sideA = comparison.sideAColumnIds.map(getColumn).filter(Boolean);
+  const sideB = comparison.sideBColumnIds.map(getColumn).filter(Boolean);
+  const sideARows = state.referencePanel.rows.map(function (ref, i) {
+    return Object.assign({}, ref, { poolReplicates: sideA.map(function (c) { return c.values[i]; }) });
+  });
+  const sideBRows = state.referencePanel.rows.map(function (ref, i) {
+    return Object.assign({}, ref, { poolReplicates: sideB.map(function (c) { return c.values[i]; }) });
+  });
+  const batchResult = Calc.poolPlasmaAnalysis(sideARows, sideBRows);
+  return { comparison: comparison, sideA: sideA, sideB: sideB, batchResult: batchResult };
+}
+
+// ---------------------------------------------------------------------
+// Drilldown column definitions
+// ---------------------------------------------------------------------
+
+function duplicateDrilldownColumns() {
+  return [
+    { key: 'protein', label: 'Protein', render: function (r) { return escapeHtml(r.protein); }, sortValue: function (r) { return r.protein; } },
+    { key: 'peptide', label: 'Peptide', render: function (r) { return escapeHtml(r.peptide); }, sortValue: function (r) { return r.peptide; } },
+    { key: 'replicates', label: 'Replicates', render: function (r) { return formatReplicates(r.replicates); }, sortValue: function () { return null; } },
+    { key: 'validCount', label: 'Valid n', render: function (r) { return String(r.validCount); }, sortValue: function (r) { return r.validCount; } },
+    { key: 'mean', label: 'Mean', render: function (r) { return formatNum(Calc.mean(Calc.numericValues(r.replicates)), 2); }, sortValue: function (r) { return Calc.mean(Calc.numericValues(r.replicates)); } },
+    { key: 'sd', label: 'SD', render: function (r) { return formatNum(Calc.sd(Calc.numericValues(r.replicates)), 2); }, sortValue: function (r) { return Calc.sd(Calc.numericValues(r.replicates)); } },
+    { key: 'intraCv', label: 'Intra-CV%', render: function (r) { return r.intraCv == null ? '<span class="flag-na">N/A</span>' : formatNum(r.intraCv, 1) + '%'; }, sortValue: function (r) { return r.intraCv; } }
+  ];
+}
+function rerunDrilldownColumns() {
+  return [
+    { key: 'protein', label: 'Protein', render: function (r) { return escapeHtml(r.protein); }, sortValue: function (r) { return r.protein; } },
+    { key: 'peptide', label: 'Peptide', render: function (r) { return escapeHtml(r.peptide); }, sortValue: function (r) { return r.peptide; } },
+    { key: 'firstRun', label: 'First-run', render: function (r) { return formatReplicates(r.firstRun); }, sortValue: function () { return null; } },
+    { key: 'rerun', label: 'Rerun', render: function (r) { return formatReplicates(r.rerun); }, sortValue: function () { return null; } },
+    { key: 'intraCv', label: 'Intra-CV%', render: function (r) { return r.intraCv == null ? '<span class="flag-na">N/A</span>' : formatNum(r.intraCv, 1) + '%'; }, sortValue: function (r) { return r.intraCv; } },
+    { key: 'ratio', label: 'Ratio', render: function (r) { return r.ratio == null ? '<span class="flag-na">N/A</span>' : formatNum(r.ratio, 2) + ' (' + r.ratioBucket + ')'; }, sortValue: function (r) { return r.ratio; } },
+    { key: 'interCv', label: 'Inter-CV%', render: function (r) { return r.interCv == null ? '<span class="flag-na">N/A</span>' : formatNum(r.interCv, 1) + '%'; }, sortValue: function (r) { return r.interCv; } }
+  ];
+}
+function poolPlasmaDrilldownColumns() {
+  return [
+    { key: 'protein', label: 'Protein', render: function (r) { return escapeHtml(r.protein); }, sortValue: function (r) { return r.protein; } },
+    { key: 'peptide', label: 'Peptide', render: function (r) { return escapeHtml(r.peptide); }, sortValue: function (r) { return r.peptide; } },
+    { key: 'firstRunReplicates', label: 'Side A', render: function (r) { return formatReplicates(r.firstRunReplicates); }, sortValue: function () { return null; } },
+    { key: 'rerunReplicates', label: 'Side B', render: function (r) { return formatReplicates(r.rerunReplicates); }, sortValue: function () { return null; } },
+    { key: 'firstIntraCv', label: 'Side A intra-CV%', render: function (r) { return r.firstIntraCv == null ? '<span class="flag-na">N/A</span>' : formatNum(r.firstIntraCv, 1) + '%'; }, sortValue: function (r) { return r.firstIntraCv; } },
+    { key: 'rerunIntraCv', label: 'Side B intra-CV%', render: function (r) { return r.rerunIntraCv == null ? '<span class="flag-na">N/A</span>' : formatNum(r.rerunIntraCv, 1) + '%'; }, sortValue: function (r) { return r.rerunIntraCv; } },
+    { key: 'ratio', label: 'Ratio (B/A)', render: function (r) { return r.ratio == null ? '<span class="flag-na">N/A</span>' : formatNum(r.ratio, 2) + ' (' + r.ratioBucket + ')'; }, sortValue: function (r) { return r.ratio; } }
+  ];
+}
+
+// ---------------------------------------------------------------------
+// Card renderers
+// ---------------------------------------------------------------------
+
+function renderDuplicateCard(anchorId) {
+  const group = derivedGroups('Duplicate')[anchorId];
+  const res = computeDuplicateResult(group);
+  const cardId = 'dup_' + anchorId;
+  const hasVip = group.anchor.vip || group.members.some(function (m) { return m.vip; });
+  const sentence = Calc.summarySentence('duplicate', res);
+  const countsHtml = renderCountsTable([
+    { label: 'Valid peptides compared', value: res.counts.validPeptideCount },
+    { label: '&gt;10% CV', value: res.counts.cv10 },
+    { label: '&gt;20% CV (fail threshold: &gt;' + Calc.THRESHOLDS.duplicateCvFailPeptideCount + ')', value: res.counts.cv20 },
+    { label: '&gt;30% CV', value: res.counts.cv30 }
+  ]);
+  const isFlagged = function (row) { return row.excluded || (row.intraCv != null && row.intraCv > Calc.THRESHOLDS.duplicateCvFailPercent); };
+  const drilldownHtml = renderDrilldownTable(cardId, res.perPeptide, duplicateDrilldownColumns(), isFlagged);
+  return renderCardShell({
+    id: cardId,
+    title: 'Duplicate/VIP — ' + escapeHtml(group.anchor.sampleId) + vipBadge(hasVip),
+    subtitle: 'Batch: ' + escapeHtml(batchName(group.anchor.batchId)) + ' · ' + (group.members.length + 1) + ' replicate columns',
+    verdict: res.verdict,
+    sentence: sentence,
+    countsHtml: countsHtml,
+    drilldownHtml: drilldownHtml
+  });
+}
+
+function renderRerunSampleCard(anchorId) {
+  const group = derivedGroups('Rerun')[anchorId];
+  const res = computeRerunResult(group);
+  const cardId = 'rerun_' + anchorId;
+  const hasVip = group.anchor.vip || group.members.some(function (m) { return m.vip; });
+  const firstBatch = batchName(group.anchor.batchId);
+  const rerunBatch = batchName(group.members[0].batchId);
+  const overallVerdict = res.decision.recommendation === 'escalate-vendor' ? 'FAIL' : 'PASS';
+  const sentence = 'Intra-run CV ' + res.decision.intraVerdict + ' (' + res.batchResult.intraCounts.cv20 + '/' + res.batchResult.intraCounts.validPeptideCount + ' peptides &gt;20% CV). ' +
+    'Inter-run CV ' + res.decision.interVerdict + ' (' + res.batchResult.interCounts.cv30 + '/' + res.batchResult.interCounts.validPeptideCount + ' peptides &gt;30% CV).' +
+    (res.decision.directionalDrift.flagged ? ' Systematic drift flagged for this sample\'s ratio direction.' : '');
+  const recommendationHtml = '<p class="recommendation"><strong>Recommendation:</strong> ' + escapeHtml(RECOMMENDATION_LABEL[res.decision.recommendation]) + '</p>';
+  const countsHtml = renderCountsTable([
+    { label: 'Intra-run &gt;20% CV (fail &gt;' + Calc.THRESHOLDS.rerunIntraFailPeptideCount + ')', value: res.batchResult.intraCounts.cv20 + '/' + res.batchResult.intraCounts.validPeptideCount },
+    { label: 'Inter-run &gt;30% CV (fail &gt;' + Calc.THRESHOLDS.rerunInterFailPeptideCount + ')', value: res.batchResult.interCounts.cv30 + '/' + res.batchResult.interCounts.validPeptideCount },
+    { label: 'Sample ratio (mean of peptide ratios)' + infoDot('inter-run-cv-definition'), value: formatNum(res.sampleRatio, 2) }
+  ]);
+  const histogramHtml = renderHistogram(res.batchResult.ratioBuckets);
+  const isFlagged = function (row) {
+    return row.excluded ||
+      (row.intraCv != null && row.intraCv > Calc.THRESHOLDS.rerunIntraFailPercent) ||
+      (row.interCv != null && row.interCv > Calc.THRESHOLDS.rerunInterFailPercent) ||
+      (row.ratio != null && (row.ratio < Calc.THRESHOLDS.rerunRatioBandLo || row.ratio >= Calc.THRESHOLDS.rerunRatioBandHi));
+  };
+  const drilldownHtml = renderDrilldownTable(cardId, res.batchResult.perPeptide, rerunDrilldownColumns(), isFlagged);
+  return renderCardShell({
+    id: cardId,
+    title: 'Rerun comparison — ' + escapeHtml(group.anchor.sampleId) + vipBadge(hasVip),
+    subtitle: 'First-run batch: ' + escapeHtml(firstBatch) + ' → Rerun batch: ' + escapeHtml(rerunBatch),
+    verdict: overallVerdict,
+    sentence: sentence,
+    recommendationHtml: recommendationHtml,
+    countsHtml: countsHtml,
+    histogramHtml: histogramHtml,
+    drilldownHtml: drilldownHtml
+  });
+}
+
+function renderPoolPlasmaCard(comparisonId) {
+  const comparison = state.poolPlasmaComparisons.find(function (c) { return c.id === comparisonId; });
+  const res = computePoolPlasmaResult(comparison);
+  const cardId = 'pool_' + comparisonId;
+  const sideALabel = res.sideA.map(function (c) { return c.sampleId; }).join(', ') + ' (' + batchName(res.sideA[0] ? res.sideA[0].batchId : null) + ')';
+  const sideBLabel = res.sideB.map(function (c) { return c.sampleId; }).join(', ') + ' (' + batchName(res.sideB[0] ? res.sideB[0].batchId : null) + ')';
+  const sentence = Calc.summarySentence('poolPlasma', res.batchResult);
+  const countsHtml = renderCountsTable([
+    { label: 'Valid peptides compared', value: res.batchResult.counts.validPeptideCount },
+    { label: '&gt;30% CV (fail threshold: &gt;' + Calc.THRESHOLDS.poolPlasmaCvFailPeptideCount + ')', value: res.batchResult.counts.cv30 }
+  ]);
+  const histogramHtml = renderHistogram(res.batchResult.ratioBuckets);
+  const isFlagged = function (row) {
+    return (row.rerunIntraCv != null && row.rerunIntraCv > Calc.THRESHOLDS.poolPlasmaCvFailPercent) ||
+      (row.firstIntraCv != null && row.firstIntraCv > Calc.THRESHOLDS.poolPlasmaCvFailPercent) ||
+      (row.ratio != null && (row.ratio < Calc.THRESHOLDS.rerunRatioBandLo || row.ratio >= Calc.THRESHOLDS.rerunRatioBandHi));
+  };
+  const drilldownHtml = renderDrilldownTable(cardId, res.batchResult.perPeptide, poolPlasmaDrilldownColumns(), isFlagged);
+  return renderCardShell({
+    id: cardId,
+    title: 'Pool plasma — ' + escapeHtml(comparison.label),
+    subtitle: 'Side A: ' + escapeHtml(sideALabel) + ' &nbsp;↔&nbsp; Side B: ' + escapeHtml(sideBLabel),
+    verdict: res.batchResult.verdict,
+    sentence: sentence,
+    countsHtml: countsHtml,
+    histogramHtml: histogramHtml,
+    drilldownHtml: drilldownHtml
+  });
+}
+
+function renderSampleBreakdownTable(perSampleSummary) {
+  const rowsHtml = perSampleSummary.map(function (s) {
+    return '<tr><td>' + escapeHtml(s.sampleId) + '</td><td>' + s.intraVerdict + '</td><td>' + s.interVerdict + '</td><td>' + s.interCv20Count + '</td></tr>';
+  }).join('');
+  return '<table><thead><tr><th>Sample</th><th>Intra verdict</th><th>Inter verdict</th><th>Peptides &gt;20% inter-CV</th></tr></thead><tbody>' + rowsHtml + '</tbody></table>' +
+    '<p class="hint">Full per-peptide detail is on that sample\'s card in the "Rerun Comparisons (per sample)" section below.</p>';
+}
+
+function renderRerunRollups() {
+  const groups = derivedGroups('Rerun');
+  const anchorIds = Object.keys(groups);
+  const container = document.getElementById('rerunRollups');
+  if (anchorIds.length === 0) { container.innerHTML = '<p class="hint">No rerun comparisons linked yet.</p>'; return; }
+
+  const results = anchorIds.map(function (id) { return computeRerunResult(groups[id]); });
+  const byRerunBatch = {};
+  results.forEach(function (res) {
+    const batchId = res.members[0].batchId;
+    (byRerunBatch[batchId] = byRerunBatch[batchId] || []).push(res);
+  });
+
+  container.innerHTML = Object.keys(byRerunBatch).map(function (batchId) {
+    const group = byRerunBatch[batchId];
+    const perSampleSummary = group.map(function (res) {
+      return {
+        sampleId: res.anchor.sampleId,
+        interVerdict: res.decision.interVerdict,
+        interCv20Count: res.batchResult.interCounts.cv20,
+        intraVerdict: res.decision.intraVerdict,
+        reasonCode: res.decision.reasonCode
+      };
+    });
+    const perSampleRatios = group.map(function (res, i) { return { sampleId: perSampleSummary[i].sampleId, ratio: res.sampleRatio }; }).filter(function (s) { return s.ratio != null; });
+    const drift = Calc.directionalDriftFlag(perSampleRatios);
+    const escalation = Calc.batchLevelEscalation(group.map(function (res) { return res.decision.intraVerdict; }));
+    const failedSamples = perSampleSummary.filter(function (s) { return s.interVerdict === 'FAIL'; });
+    const representativeReasonCode = drift.flagged ? 'SYSTEMATIC_DRIFT' : (failedSamples[0] ? failedSamples[0].reasonCode : 'INTRA_PASS_INTER_PASS');
+    const sentence = Calc.summarySentence('rerun', {}, { reasonCode: representativeReasonCode, interVerdict: failedSamples.length ? 'FAIL' : 'PASS' }, perSampleSummary);
+    const overallVerdict = (escalation.flagged || failedSamples.length > 0) ? 'FAIL' : 'PASS';
+    const flagPills = [
+      escalation.flagged ? '<span class="flag-pill">Vendor escalation — ' + Math.round(escalation.failFraction * 100) + '% of duplicates failed intra-run CV' + infoDot('directional-drift-fraction') + '</span>' : '',
+      drift.flagged ? '<span class="flag-pill">Systematic drift — ' + Math.round(drift.fraction * 100) + '% of samples shifted ' + drift.direction + infoDot('directional-drift-fraction') + '</span>' : ''
+    ].filter(Boolean).join(' ');
+    const cardId = 'rollup_' + batchId;
+    return renderCardShell({
+      id: cardId,
+      title: 'Rerun batch: ' + escapeHtml(batchName(batchId)),
+      subtitle: group.length + ' sample(s) in this rerun batch',
+      verdict: overallVerdict,
+      sentence: sentence,
+      extraFlagsHtml: flagPills,
+      drilldownHtml: renderSampleBreakdownTable(perSampleSummary)
+    });
+  }).join('');
+}
+
+function renderSummary() {
+  renderRerunRollups();
+
+  const dupGroups = derivedGroups('Duplicate');
+  const dupIds = Object.keys(dupGroups);
+  document.getElementById('duplicateCards').innerHTML = dupIds.length ? dupIds.map(renderDuplicateCard).join('') : '<p class="hint">No duplicate columns linked yet.</p>';
+
+  const rerunGroups = derivedGroups('Rerun');
+  const rerunIds = Object.keys(rerunGroups);
+  document.getElementById('rerunCards').innerHTML = rerunIds.length ? rerunIds.map(renderRerunSampleCard).join('') : '<p class="hint">No rerun columns linked yet.</p>';
+
+  const comparisons = state.poolPlasmaComparisons;
+  document.getElementById('poolPlasmaCards').innerHTML = comparisons.length
+    ? comparisons.map(function (c) { return renderPoolPlasmaCard(c.id); }).join('')
+    : '<p class="hint">No pool plasma comparisons created yet.</p>';
+}
+
+// ---------------------------------------------------------------------
+// Navigation + bootstrap
+// ---------------------------------------------------------------------
+
+function switchView(name) {
+  document.querySelectorAll('.nav-btn').forEach(function (b) { b.classList.toggle('active', b.getAttribute('data-nav') === name); });
+  document.querySelectorAll('.view').forEach(function (v) { v.classList.toggle('active', v.getAttribute('data-view') === name); });
+}
+
+function wireStaticHandlers() {
+  document.querySelectorAll('.nav-btn').forEach(function (btn) {
+    btn.addEventListener('click', function () { switchView(btn.getAttribute('data-nav')); });
+  });
+  document.getElementById('assumptionsToggle').addEventListener('click', toggleAssumptionsPanel);
+  document.getElementById('parseRefPanelBtn').addEventListener('click', handleParseReferencePanel);
+  document.getElementById('loadDemoBtn').addEventListener('click', handleLoadDemoData);
+  document.getElementById('addRefRowBtn').addEventListener('click', handleAddRefRow);
+  document.getElementById('refPanelTable').addEventListener('change', handleRefPanelCellEdit);
+  document.getElementById('refPanelTable').addEventListener('click', handleRefPanelTableClick);
+
+  document.getElementById('addBatchBtn').addEventListener('click', handleAddBatch);
+  document.getElementById('gridPasteInput').addEventListener('input', updateGridMismatchWarning);
+  document.getElementById('parseGridBtn').addEventListener('click', handleParseGrid);
+  document.getElementById('classifyTable').addEventListener('change', handleClassifyTableChange);
+  document.getElementById('classifyTable').addEventListener('click', handleClassifyTableClick);
+  document.getElementById('saveClassifiedBtn').addEventListener('click', handleSaveClassified);
+  document.getElementById('cancelClassifyBtn').addEventListener('click', handleCancelClassify);
+
+  document.getElementById('sampleColumnsTable').addEventListener('click', handleSampleColumnsTableClick);
+  document.getElementById('createComparisonBtn').addEventListener('click', handleCreateComparison);
+  document.getElementById('comparisonsTable').addEventListener('click', handleComparisonsTableClick);
+}
+
+function init() {
+  renderAssumptionsBanner();
+  renderReferencePanelView();
+  renderPasteView();
+  renderRunsView();
+  renderSummary();
+  wireStaticHandlers();
+}
+
+document.addEventListener('DOMContentLoaded', init);
+</script>
+</body>
+</html>
