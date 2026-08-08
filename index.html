@@ -132,8 +132,8 @@
     </div>
 
     <h3 class="subhead">Step A — paste the raw grid</h3>
-    <p class="hint">Paste a full tab-delimited block copied straight from the sheet — one line per peptide (same order as the reference panel), as many sample columns as you like in one go.</p>
-    <textarea id="gridPasteInput" rows="8" placeholder="BLQ&lt;1.4&#9;42.0&#9;39.5&#10;112.4&#9;205.3&#9;130.1"></textarea>
+    <p class="hint">Paste a full tab-delimited block copied straight from the sheet — one line per peptide (same order as the reference panel), as many sample columns as you like in one go. If you copy straight from the sheet including its own header rows, the barcode row (and a label row above the data, if present) is auto-detected and used to fill in each column's Sample ID.</p>
+    <textarea id="gridPasteInput" rows="8" placeholder="P4A-228G789&#9;P1-473G835&#10;P228G789 Calculated Concentration&#9;P473G835 Calculated Concentration&#10;BLQ&lt;1.357&#9;42.0&#10;13.53&#9;205.3"></textarea>
     <p id="gridMismatchWarning" class="warning hidden"></p>
     <button id="parseGridBtn">Parse columns</button>
 
@@ -570,11 +570,43 @@ function renderPasteView() {
   updateGridMismatchWarning();
 }
 
+/**
+ * Real copy-pasted columns from the sheet include 1-2 header lines above the
+ * actual peptide values: a barcode line (e.g. "P4A-228G789") and, often, a
+ * label line (e.g. "P228G789 Calculated Concentration"). Detect that shape
+ * from line count alone — if there are exactly 1 or 2 more lines than the
+ * reference panel has rows, treat the leading line(s) as headers rather than
+ * data, so column c1's barcode can auto-fill Sample ID instead of being typed
+ * by hand for every column.
+ * @returns {number} 0, 1, or 2 — how many leading lines are headers, not data
+ */
+function detectHeaderRowCount(lineCount, expectedRowCount) {
+  const extra = lineCount - expectedRowCount;
+  return (extra === 1 || extra === 2) ? extra : 0;
+}
+
+/** Split the textarea into lines, stripping a single trailing blank line (a
+ * common copy/paste artifact) but preserving legitimate blank data rows. */
+function splitGridLines() {
+  const lines = document.getElementById('gridPasteInput').value.split(/\r?\n/);
+  if (lines.length > 0 && lines[lines.length - 1] === '') lines.pop();
+  return lines;
+}
+
 function updateGridMismatchWarning() {
-  const lines = document.getElementById('gridPasteInput').value.split(/\r?\n/).filter(function (l) { return l !== ''; });
+  const lines = splitGridLines();
   const expected = state.referencePanel.rows.length;
   const warningEl = document.getElementById('gridMismatchWarning');
   if (lines.length === 0) { warningEl.classList.add('hidden'); return; }
+
+  const headerRowCount = detectHeaderRowCount(lines.length, expected);
+  if (headerRowCount > 0) {
+    warningEl.textContent = 'Detected ' + headerRowCount + ' header line(s) at the top (barcode' + (headerRowCount === 2 ? ' + label' : '') +
+      ') — row 1 will auto-fill each column\'s Sample ID' + (headerRowCount === 2 ? ', row 2 is ignored' : '') +
+      '. Remaining ' + (lines.length - headerRowCount) + ' row(s) match the reference panel.';
+    warningEl.classList.remove('hidden');
+    return;
+  }
   if (lines.length !== expected) {
     warningEl.textContent = 'Pasted ' + lines.length + ' line(s), but the reference panel has ' + expected + ' row(s). Missing rows are treated as empty; extra rows are dropped. You can still parse.';
     warningEl.classList.remove('hidden');
@@ -585,16 +617,19 @@ function updateGridMismatchWarning() {
 
 function handleParseGrid() {
   if (state.referencePanel.rows.length === 0) { alert('Set up the reference panel first.'); return; }
-  let lines = document.getElementById('gridPasteInput').value.split(/\r?\n/);
-  if (lines.length > 0 && lines[lines.length - 1] === '') lines.pop();
+  let lines = splitGridLines();
   if (lines.length === 0) { alert('Paste a grid first.'); return; }
 
   const expected = state.referencePanel.rows.length;
+  const headerRowCount = detectHeaderRowCount(lines.length, expected);
+  const barcodeRow = headerRowCount > 0 ? lines[0].split('\t') : null;
+  if (headerRowCount > 0) lines = lines.slice(headerRowCount);
+
   while (lines.length < expected) lines.push('');
   if (lines.length > expected) lines = lines.slice(0, expected);
 
   const splitLines = lines.map(function (l) { return l.split('\t'); });
-  const columnCount = Math.max.apply(null, splitLines.map(function (cells) { return cells.length; }));
+  const columnCount = barcodeRow ? barcodeRow.length : Math.max.apply(null, splitLines.map(function (cells) { return cells.length; }));
 
   const rawColumns = [];
   for (let c = 0; c < columnCount; c++) {
@@ -604,7 +639,8 @@ function handleParseGrid() {
   pendingGrid = { columnCount: columnCount, rawColumns: rawColumns };
   pendingClassifications = [];
   for (let c = 0; c < columnCount; c++) {
-    pendingClassifications.push({ sampleId: '', category: 'First-run', vip: false, batchId: '', linkedFirstRunColumnId: '' });
+    const prefillId = barcodeRow && barcodeRow[c] != null ? barcodeRow[c].trim() : '';
+    pendingClassifications.push({ sampleId: prefillId, category: 'First-run', vip: false, batchId: '', linkedFirstRunColumnId: '' });
   }
   renderClassifyStep();
 }
