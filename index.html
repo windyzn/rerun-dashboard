@@ -683,15 +683,32 @@ function renderPasteView() {
  * Real copy-pasted columns from the sheet include 1-2 header lines above the
  * actual peptide values: a barcode line (e.g. "P4A-228G789") and, often, a
  * label line (e.g. "P228G789 Calculated Concentration"). Detect that shape
- * from line count alone — if there are exactly 1 or 2 more lines than the
- * reference panel has rows, treat the leading line(s) as headers rather than
- * data, so column c1's barcode can auto-fill Sample ID instead of being typed
- * by hand for every column.
+ * from CONTENT, not by comparing line counts against the reference panel —
+ * real multi-column pastes routinely have a total row count that doesn't
+ * exactly match the reference panel (a partial column, an extra blank line,
+ * duplicate/rerun columns whose own header rows repeat a barcode across
+ * several columns), and count-based matching silently gives up the moment
+ * that happens, baking the header text in as fake peptide values instead of
+ * stripping it. A line is a header line if every non-empty cell on it fails
+ * to parse as a real QC value (numeric/BLQ/NR) — barcodes and "<ID>
+ * Calculated Concentration" labels are always plain text, so this is a
+ * stable signature regardless of exact row counts. Only the first 2 lines
+ * are ever checked (the max header shape Xukun's sheet uses).
  * @returns {number} 0, 1, or 2 — how many leading lines are headers, not data
  */
-function detectHeaderRowCount(lineCount, expectedRowCount) {
-  const extra = lineCount - expectedRowCount;
-  return (extra === 1 || extra === 2) ? extra : 0;
+function looksLikeNonValueRow(line) {
+  const cells = line.split('\t').map(function (c) { return c.trim(); }).filter(function (c) { return c !== ''; });
+  if (cells.length === 0) return false;
+  return cells.every(function (c) {
+    const kind = Calc.parseValue(c).kind;
+    return kind !== 'numeric' && kind !== 'blq' && kind !== 'nr';
+  });
+}
+function detectHeaderRowCount(lines) {
+  if (lines.length > 0 && looksLikeNonValueRow(lines[0])) {
+    return (lines.length > 1 && looksLikeNonValueRow(lines[1])) ? 2 : 1;
+  }
+  return 0;
 }
 
 /** Split the textarea into lines, stripping a single trailing blank line (a
@@ -708,16 +725,18 @@ function updateGridMismatchWarning() {
   const warningEl = document.getElementById('gridMismatchWarning');
   if (lines.length === 0) { warningEl.classList.add('hidden'); return; }
 
-  const headerRowCount = detectHeaderRowCount(lines.length, expected);
+  const headerRowCount = detectHeaderRowCount(lines);
+  const dataLineCount = lines.length - headerRowCount;
+  const parts = [];
   if (headerRowCount > 0) {
-    warningEl.textContent = 'Detected ' + headerRowCount + ' header line(s) at the top (barcode' + (headerRowCount === 2 ? ' + label' : '') +
-      ') — row 1 will auto-fill each column\'s Sample ID' + (headerRowCount === 2 ? ', row 2 is ignored' : '') +
-      '. Remaining ' + (lines.length - headerRowCount) + ' row(s) match the reference panel.';
-    warningEl.classList.remove('hidden');
-    return;
+    parts.push('Detected ' + headerRowCount + ' header line(s) at the top (barcode' + (headerRowCount === 2 ? ' + label' : '') +
+      ') — row 1 will auto-fill each column\'s Sample ID' + (headerRowCount === 2 ? ', row 2 is ignored' : '') + '.');
   }
-  if (lines.length !== expected) {
-    warningEl.textContent = 'Pasted ' + lines.length + ' line(s), but the reference panel has ' + expected + ' row(s). Missing rows are treated as empty; extra rows are dropped. You can still parse.';
+  if (dataLineCount !== expected) {
+    parts.push((headerRowCount > 0 ? 'Remaining ' : 'Pasted ') + dataLineCount + ' data row(s), but the reference panel has ' + expected + ' row(s). Missing rows are treated as empty; extra rows are dropped. You can still parse.');
+  }
+  if (parts.length > 0) {
+    warningEl.textContent = parts.join(' ');
     warningEl.classList.remove('hidden');
   } else {
     warningEl.classList.add('hidden');
@@ -730,7 +749,7 @@ function handleParseGrid() {
   if (lines.length === 0) { alert('Paste a grid first.'); return; }
 
   const expected = state.referencePanel.rows.length;
-  const headerRowCount = detectHeaderRowCount(lines.length, expected);
+  const headerRowCount = detectHeaderRowCount(lines);
   const barcodeRow = headerRowCount > 0 ? lines[0].split('\t') : null;
   if (headerRowCount > 0) lines = lines.slice(headerRowCount);
 
