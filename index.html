@@ -78,6 +78,7 @@
   .row{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
   .batches-box{ border:1px solid var(--border); border-radius:8px; padding:12px; background:#fff; max-width:520px; }
   .batch-chip{ display:inline-block; background:#eef1f5; border-radius:12px; padding:3px 10px; font-size:12.5px; margin:2px 4px 2px 0; }
+  .batch-chip .link-btn{ font-size:12px; padding:0; margin-left:6px; }
   .classify-table td, .classify-table th{ font-size:12px; }
   .side-box{ border:1px solid var(--border); border-radius:8px; padding:10px; flex:1; min-width:220px; max-height:220px; overflow:auto; }
   .side-box label{ display:block; font-size:12.5px; margin:2px 0; }
@@ -605,7 +606,12 @@ function handleLoadDemoData() {
 
 function renderBatchChips() {
   document.getElementById('batchChips').innerHTML = state.batches.length
-    ? state.batches.map(function (b) { return '<span class="batch-chip">' + escapeHtml(b.name) + '</span>'; }).join('')
+    ? state.batches.map(function (b) {
+        return '<span class="batch-chip">' + escapeHtml(b.name) +
+          ' <button data-action="rename-batch" data-id="' + b.id + '" class="link-btn">Rename</button>' +
+          ' <button data-action="delete-batch" data-id="' + b.id + '" class="link-btn danger">Delete</button>' +
+          '</span>';
+      }).join('')
     : '<span class="hint">No batches yet — add one below.</span>';
 }
 function handleAddBatch() {
@@ -617,6 +623,43 @@ function handleAddBatch() {
   input.value = '';
   renderBatchChips();
   renderClassifyStep();
+}
+function handleBatchChipsClick(e) {
+  const renameBtn = e.target.closest('button[data-action="rename-batch"]');
+  if (renameBtn) { handleRenameBatch(renameBtn.getAttribute('data-id')); return; }
+  const deleteBtn = e.target.closest('button[data-action="delete-batch"]');
+  if (deleteBtn) { handleDeleteBatch(deleteBtn.getAttribute('data-id')); return; }
+}
+function handleRenameBatch(id) {
+  const b = getBatch(id);
+  if (!b) return;
+  const name = prompt('Rename batch:', b.name);
+  if (name === null) return;
+  const trimmed = name.trim();
+  if (!trimmed) { alert('Batch name is required.'); return; }
+  b.name = trimmed;
+  saveBatches();
+  refreshAllBatchDependentViews();
+}
+function handleDeleteBatch(id) {
+  const b = getBatch(id);
+  if (!b) return;
+  const usedByCount = state.sampleColumns.filter(function (c) { return c.batchId === id; }).length;
+  const usedByPending = pendingClassifications.filter(function (pc) { return pc.batchId === id; }).length;
+  let msg = 'Delete batch "' + b.name + '"?';
+  if (usedByCount > 0) msg += ' It is used by ' + usedByCount + ' saved sample column(s) — they will show as "(no batch)" until reassigned.';
+  if (usedByPending > 0) msg += ' It is also selected on ' + usedByPending + ' unsaved pasted column(s) in the classify table — that selection will be cleared.';
+  if (!confirm(msg)) return;
+  state.batches = state.batches.filter(function (x) { return x.id !== id; });
+  saveBatches();
+  pendingClassifications.forEach(function (pc) { if (pc.batchId === id) pc.batchId = ''; });
+  refreshAllBatchDependentViews();
+}
+function refreshAllBatchDependentViews() {
+  renderBatchChips();
+  renderClassifyStep();
+  renderRunsView();
+  renderSummary();
 }
 function batchOptionsHtml(selectedId) {
   return '<option value="">— choose —</option>' + state.batches.map(function (b) {
@@ -1240,6 +1283,7 @@ function wireStaticHandlers() {
   document.getElementById('refPanelTable').addEventListener('click', handleRefPanelTableClick);
 
   document.getElementById('addBatchBtn').addEventListener('click', handleAddBatch);
+  document.getElementById('batchChips').addEventListener('click', handleBatchChipsClick);
   document.getElementById('gridPasteInput').addEventListener('input', updateGridMismatchWarning);
   document.getElementById('parseGridBtn').addEventListener('click', handleParseGrid);
   document.getElementById('classifyTable').addEventListener('change', handleClassifyTableChange);
