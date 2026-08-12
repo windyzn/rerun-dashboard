@@ -6,10 +6,11 @@
 <title>Rerun Sample QC Dashboard</title>
 <style>
   :root{
-    --bg:#f3f4f8; --card-bg:#ffffff; --border:#e3e6ec; --text:#181d27; --muted:#6b7280;
-    --pass-bg:#e6f4ea; --pass-text:#1e7b34; --fail-bg:#fdecea; --fail-text:#c62828;
-    --warn-bg:#fff4e5; --warn-text:#8a5a00; --accent:#3556f0; --accent-dark:#2743c4; --accent-soft:#eaefff;
-    --shadow-sm:0 1px 2px rgba(20,24,40,0.05); --shadow-md:0 4px 16px rgba(20,24,40,0.08);
+    /* Molecular You brand palette (pulled from molecularyou.com's own stylesheet) */
+    --bg:#F6FCFF; --card-bg:#ffffff; --border:#DCE7ED; --text:#18374B; --muted:#61859D;
+    --pass-bg:#F0F9F4; --pass-text:#2E7D5C; --pass-accent:#7EBC9A; --fail-bg:#fdecea; --fail-text:#c62828;
+    --warn-bg:#fff4e5; --warn-text:#8a5a00; --accent:#18374B; --accent-dark:#0F2738; --accent-soft:#E9F0F5;
+    --shadow-sm:0 1px 2px rgba(24,55,75,0.06); --shadow-md:0 4px 16px rgba(24,55,75,0.10);
   }
   *{ box-sizing:border-box; }
   body{ font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; background:var(--bg); color:var(--text); margin:0; -webkit-font-smoothing:antialiased; }
@@ -17,12 +18,14 @@
   header h1{ font-size:16px; font-weight:700; margin:0; letter-spacing:-0.01em; flex-shrink:0; }
   nav.stepper{ display:flex; align-items:center; flex-wrap:nowrap; gap:0; flex:1; min-width:0; overflow-x:auto; }
   .step-connector{ width:14px; height:2px; background:var(--border); margin:0 2px; flex-shrink:0; }
-  .step-connector.done{ background:var(--accent); }
+  .step-connector.done{ background:var(--pass-accent); }
   .nav-btn{ display:flex; align-items:center; gap:6px; padding:5px 12px 5px 5px; border:1px solid var(--border); background:#fff; border-radius:999px; cursor:pointer; font-size:12.5px; font-weight:500; color:var(--text); white-space:nowrap; flex-shrink:0; transition:border-color .15s ease, box-shadow .15s ease, background .15s ease; }
   .nav-btn:hover{ border-color:var(--accent); }
   .step-num{ width:20px; height:20px; border-radius:50%; background:#eef1f5; color:var(--muted); display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:700; flex-shrink:0; transition:background .15s ease, color .15s ease; }
-  .nav-btn.active{ background:var(--accent); color:#fff; border-color:var(--accent); box-shadow:0 2px 10px rgba(53,86,240,0.35); }
+  .nav-btn.active{ background:var(--accent); color:#fff; border-color:var(--accent); box-shadow:0 2px 10px rgba(24,55,75,0.35); }
   .nav-btn.active .step-num{ background:#fff; color:var(--accent); }
+  header h1{ cursor:pointer; }
+  header h1:hover{ color:var(--accent-dark); }
   .assumptions-toggle{ background:var(--warn-bg); color:var(--warn-text); border:1px solid #f0c36d; border-radius:999px; padding:6px 12px; cursor:pointer; font-size:12px; font-weight:600; flex-shrink:0; white-space:nowrap; transition:filter .15s ease; }
   .assumptions-toggle:hover{ filter:brightness(0.97); }
   .assumptions-panel{ background:#fff8ec; border-bottom:1px solid #f0c36d; padding:14px 24px; font-size:13px; }
@@ -103,14 +106,57 @@
   .side-box{ border:1px solid var(--border); border-radius:8px; padding:10px; flex:1; min-width:220px; max-height:220px; overflow:auto; }
   .side-box label{ display:block; font-size:12.5px; margin:2px 0; }
   .step-gate{ opacity:0.5; pointer-events:none; }
+
+  /* Landing page ---------------------------------------------------- */
+  .home-hero{ text-align:center; max-width:640px; margin:20px auto 32px; }
+  .home-title{ font-size:28px; font-weight:800; margin:0 0 10px; color:var(--text); letter-spacing:-0.02em; }
+  .home-subtitle{ font-size:14.5px; color:var(--muted); line-height:1.6; margin:0; }
+  .home-actions{ display:flex; gap:18px; max-width:820px; margin:0 auto 36px; flex-wrap:wrap; }
+  .home-action-card{ flex:1; min-width:260px; background:var(--card-bg); border:1px solid var(--border); border-radius:14px; padding:24px 22px; text-align:left; cursor:pointer; box-shadow:var(--shadow-md); transition:transform .15s ease, box-shadow .15s ease, border-color .15s ease; display:flex; flex-direction:column; gap:6px; }
+  .home-action-card:hover{ transform:translateY(-2px); box-shadow:0 10px 28px rgba(24,55,75,0.16); border-color:var(--accent); }
+  .home-action-card.disabled-hint{ opacity:0.6; }
+  .home-action-icon{ font-size:26px; }
+  .home-action-title{ font-size:16px; font-weight:700; color:var(--text); }
+  .home-action-desc{ font-size:13px; color:var(--muted); line-height:1.5; }
+  .home-checklist{ max-width:820px; margin:0 auto; display:flex; flex-direction:column; gap:8px; }
+  .home-checklist-item{ display:flex; align-items:center; gap:12px; background:var(--card-bg); border:1px solid var(--border); border-radius:10px; padding:10px 14px; text-align:left; cursor:pointer; transition:border-color .15s ease, background .15s ease; }
+  .home-checklist-item:hover{ border-color:var(--accent); background:var(--accent-soft); }
+  .home-checklist-item.ready .home-checklist-dot{ background:var(--pass-bg); color:var(--pass-text); border-color:var(--pass-accent); }
+  .home-checklist-dot{ width:26px; height:26px; border-radius:50%; background:#eef1f5; color:var(--muted); border:1px solid var(--border); display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:700; flex-shrink:0; }
+  .home-checklist-text{ display:flex; flex-direction:column; gap:1px; font-size:13px; color:var(--text); }
+  .home-checklist-text .hint{ font-size:12px; }
+
+  /* Step guidance banners ------------------------------------------- */
+  .step-guidance{ display:flex; align-items:center; gap:12px; border-radius:10px; padding:12px 16px; margin:12px 0 18px; }
+  .step-guidance.ready{ background:var(--pass-bg); border:1px solid var(--pass-accent); }
+  .step-guidance.pending{ background:var(--accent-soft); border:1px solid #c7d9e2; }
+  .step-guidance-icon{ font-size:17px; flex-shrink:0; }
+  .step-guidance.ready .step-guidance-icon{ color:var(--pass-text); }
+  .step-guidance.pending .step-guidance-icon{ color:var(--accent); }
+  .step-guidance-body{ flex:1; font-size:13px; }
+  .step-guidance-body strong{ display:block; font-size:13.5px; margin-bottom:1px; }
+  .step-guidance .btn{ flex-shrink:0; }
+
+  /* Print / export --------------------------------------------------- */
+  .print-only{ display:none; }
+  @media print{
+    header, .assumptions-panel, nav, .step-guidance, #exportBar, .modal-overlay,
+    section[data-view="summary"] > h2,
+    section.view:not([data-view="summary"]) { display:none !important; }
+    body{ background:#fff; }
+    main{ padding:0; max-width:100%; }
+    .print-only{ display:block; margin-bottom:18px; }
+    .card{ box-shadow:none; border:1px solid #ccc; break-inside:avoid; }
+    button.link-btn{ display:none; }
+  }
 </style>
 </head>
 <body>
 
 <header>
-  <h1>Rerun Sample QC Dashboard</h1>
+  <h1 id="homeLink" title="Back to home">Rerun Sample QC Dashboard</h1>
   <nav class="stepper">
-    <button class="nav-btn active" data-nav="setup"><span class="step-num">1</span>Reference Panel</button>
+    <button class="nav-btn" data-nav="setup"><span class="step-num">1</span>Reference Panel</button>
     <span class="step-connector"></span>
     <button class="nav-btn" data-nav="paste"><span class="step-num">2</span>Add Sample Columns</button>
     <span class="step-connector"></span>
@@ -137,8 +183,30 @@
 
 <main>
 
-  <section data-view="setup" class="view active">
+  <section data-view="home" class="view active">
+    <div class="home-hero">
+      <h2 class="home-title">Rerun Sample QC</h2>
+      <p class="home-subtitle">Automated pass/fail checks for rerun, duplicate, VIP, and pool-plasma biomarker samples — the same math you've been running by hand in the sheet, done in seconds.</p>
+    </div>
+    <div class="home-actions">
+      <button class="home-action-card" data-goto="setup">
+        <span class="home-action-icon">🧪</span>
+        <span class="home-action-title">Start a New Analysis</span>
+        <span class="home-action-desc">Set up your reference panel, paste sample data, group your comparisons, and review results — step by step.</span>
+      </button>
+      <button class="home-action-card" data-goto="summary" id="viewResultsCard">
+        <span class="home-action-icon">📊</span>
+        <span class="home-action-title">View Results</span>
+        <span class="home-action-desc">Already have data loaded? Jump straight to the summary and drilldown.</span>
+      </button>
+    </div>
+    <h3 class="subhead" style="text-align:center;">Your progress</h3>
+    <div id="homeChecklist" class="home-checklist"></div>
+  </section>
+
+  <section data-view="setup" class="view">
     <h2>1 — Reference Panel</h2>
+    <div id="step1Guidance"></div>
     <p class="hint">Paste the protein/peptide panel once (tab-delimited: Measure Type, Biofluid/Location, Measure Identifier, Units, Protein, MYCO ID, PEPTIDE ID, Peptide, LLOQ, ULOQ — one row per line). Every later sample-column paste is values-only, aligned by row position to this table.</p>
     <textarea id="refPanelInput" rows="6" placeholder="Protein&#9;Plasma&#9;Q8IZF2&#9;fmol/µL&#9;Adhesion G protein-coupled receptor F5&#9;M00000393&#9;M00000794&#9;DVIVHPLPLK&#9;1.4&#9;1630.5"></textarea>
     <div class="row" style="margin-top:8px;">
@@ -152,7 +220,7 @@
 
   <section data-view="paste" class="view">
     <h2>2 — Add Sample Columns</h2>
-    <p id="pasteFormDisabledNotice" class="warning hidden">Set up the reference panel first (Reference Panel tab) — sample values are aligned by row position to it.</p>
+    <div id="step2Guidance"></div>
 
     <h3 class="subhead">Batches</h3>
     <p class="hint">Batches are created once and picked from a list afterward — no free-text batch field on every column.</p>
@@ -183,16 +251,19 @@
   </section>
 
   <section data-view="runs" class="view">
-    <h2>Sample Columns</h2>
+    <h2>3 — Runs &amp; Grouping</h2>
+    <div id="step3Guidance"></div>
+
+    <h3 class="subhead">Sample Columns</h3>
     <table id="sampleColumnsTable"></table>
 
-    <h2>Duplicate / VIP Groups (derived from links)</h2>
+    <h3 class="subhead">Duplicate / VIP Groups (derived from links)</h3>
     <table id="duplicateGroupsTable"></table>
 
-    <h2>Rerun Groups (derived from links)</h2>
+    <h3 class="subhead">Rerun Groups (derived from links)</h3>
     <table id="rerunGroupsTable"></table>
 
-    <h2>Pool Plasma Comparisons</h2>
+    <h3 class="subhead">Pool Plasma Comparisons</h3>
     <p class="hint">Pool plasma is never auto-linked — pick which columns go on each side of a comparison. Create one comparison per pairing; never average across batches.</p>
     <div class="row" style="align-items:flex-start;">
       <div class="side-box">
@@ -212,16 +283,29 @@
   </section>
 
   <section data-view="summary" class="view">
-    <h2>Rerun Batch Overviews</h2>
+    <h2>4 — Summary &amp; Drilldown</h2>
+    <div id="step4Guidance"></div>
+
+    <div class="print-only">
+      <h1 style="margin:0 0 4px;">Rerun Sample QC Report</h1>
+      <p id="printMeta" class="hint" style="color:#555;"></p>
+    </div>
+
+    <div class="row" id="exportBar" style="margin:4px 0 20px;">
+      <button id="exportPdfBtn" class="secondary">🖨️ Export as PDF</button>
+      <button id="copySummaryBtn" class="secondary">📋 Copy summary as text</button>
+    </div>
+
+    <h3 class="subhead">Rerun Batch Overviews</h3>
     <div id="rerunRollups"></div>
 
-    <h2>Duplicate / VIP Analyses</h2>
+    <h3 class="subhead">Duplicate / VIP Analyses</h3>
     <div id="duplicateCards"></div>
 
-    <h2>Rerun Comparisons (per sample)</h2>
+    <h3 class="subhead">Rerun Comparisons (per sample)</h3>
     <div id="rerunCards"></div>
 
-    <h2>Pool Plasma Analyses</h2>
+    <h3 class="subhead">Pool Plasma Analyses</h3>
     <div id="poolPlasmaCards"></div>
   </section>
 
@@ -404,6 +488,106 @@ function renderAssumptionsBanner() {
 function toggleAssumptionsPanel() { document.getElementById('assumptionsPanel').classList.toggle('hidden'); }
 
 // ---------------------------------------------------------------------
+// Home / guided flow
+// ---------------------------------------------------------------------
+
+/** Where the user has and hasn't gotten to yet, for the landing checklist and the
+ * friendly per-step banners. Cheap to recompute — always read fresh from state. */
+function stepReadiness() {
+  const dupCount = Object.keys(derivedGroups('Duplicate')).length;
+  const rerunCount = Object.keys(derivedGroups('Rerun')).length;
+  return {
+    step1: state.referencePanel.rows.length > 0,
+    step2: state.sampleColumns.length > 0,
+    step3: dupCount > 0 || rerunCount > 0 || state.poolPlasmaComparisons.length > 0,
+    step4: state.sampleColumns.length > 0
+  };
+}
+
+function stepGuidanceHtml(opts) {
+  return '<div class="step-guidance ' + (opts.ready ? 'ready' : 'pending') + '">' +
+    '<span class="step-guidance-icon">' + (opts.ready ? '✓' : '→') + '</span>' +
+    '<div class="step-guidance-body"><strong>' + escapeHtml(opts.title) + '</strong>' + escapeHtml(opts.body) + '</div>' +
+    (opts.goto ? '<button class="btn" data-goto="' + opts.goto + '">' + escapeHtml(opts.gotoLabel || 'Continue →') + '</button>' : '') +
+  '</div>';
+}
+
+function renderStep1Guidance() {
+  const ready = stepReadiness().step1;
+  const n = state.referencePanel.rows.length;
+  document.getElementById('step1Guidance').innerHTML = stepGuidanceHtml(ready ? {
+    ready: true, title: 'Reference panel is set up',
+    body: n + ' peptide(s) loaded — you\'re ready to add sample columns.',
+    goto: 'paste', gotoLabel: 'Continue to Add Sample Columns →'
+  } : {
+    ready: false, title: 'Let\'s set up your reference panel',
+    body: 'Paste your protein/peptide panel below, or load the demo data to explore the app first.'
+  });
+}
+
+function renderStep2Guidance() {
+  const r = stepReadiness();
+  const n = state.sampleColumns.length;
+  document.getElementById('step2Guidance').innerHTML = stepGuidanceHtml(!r.step1 ? {
+    ready: false, title: 'Reference panel needed first',
+    body: 'Sample values are aligned by row position to the reference panel — set that up before pasting samples.',
+    goto: 'setup', gotoLabel: 'Go to Reference Panel →'
+  } : r.step2 ? {
+    ready: true, title: 'Sample columns added',
+    body: n + ' column(s) saved — head to Runs & Grouping to link duplicates, reruns, and pool plasma.',
+    goto: 'runs', gotoLabel: 'Continue to Runs & Grouping →'
+  } : {
+    ready: false, title: 'Add your sample columns',
+    body: 'Paste a tab-delimited block of sample values below — as many columns as you like in one go.'
+  });
+}
+
+function renderStep3Guidance() {
+  const r = stepReadiness();
+  document.getElementById('step3Guidance').innerHTML = stepGuidanceHtml(!r.step2 ? {
+    ready: false, title: 'No sample columns yet',
+    body: 'Add sample columns first, then come back here to link duplicates, reruns, and pool plasma comparisons.',
+    goto: 'paste', gotoLabel: 'Go to Add Sample Columns →'
+  } : r.step3 ? {
+    ready: true, title: 'Comparisons are grouped',
+    body: 'You have linked/compared columns ready to review.',
+    goto: 'summary', gotoLabel: 'View Summary →'
+  } : {
+    ready: false, title: 'Link your columns',
+    body: 'Rerun/Duplicate columns link to a First-run column when you save them in step 2 — or create a Pool Plasma comparison below.'
+  });
+}
+
+function renderStep4Guidance() {
+  const r = stepReadiness();
+  const el = document.getElementById('step4Guidance');
+  if (!el) return;
+  el.innerHTML = r.step3 ? '' : stepGuidanceHtml({
+    ready: false, title: 'Nothing to review yet',
+    body: 'Once you\'ve added sample columns and linked a comparison, results will show up here automatically.',
+    goto: r.step2 ? 'runs' : 'paste', gotoLabel: r.step2 ? 'Go to Runs & Grouping →' : 'Go to Add Sample Columns →'
+  });
+}
+
+function renderHomeChecklist() {
+  const r = stepReadiness();
+  const steps = [
+    { n: 1, label: 'Reference Panel', view: 'setup', ready: r.step1, readyNote: state.referencePanel.rows.length + ' peptide(s) loaded', pendingNote: 'Not set up yet' },
+    { n: 2, label: 'Add Sample Columns', view: 'paste', ready: r.step2, readyNote: state.sampleColumns.length + ' column(s) added', pendingNote: 'No sample data yet' },
+    { n: 3, label: 'Runs & Grouping', view: 'runs', ready: r.step3, readyNote: 'Comparisons linked', pendingNote: 'Nothing grouped yet' },
+    { n: 4, label: 'Summary & Drilldown', view: 'summary', ready: r.step4, readyNote: 'Ready to review', pendingNote: 'Nothing to show yet' }
+  ];
+  document.getElementById('homeChecklist').innerHTML = steps.map(function (s) {
+    return '<button class="home-checklist-item ' + (s.ready ? 'ready' : 'pending') + '" data-goto="' + s.view + '">' +
+      '<span class="home-checklist-dot">' + (s.ready ? '✓' : s.n) + '</span>' +
+      '<span class="home-checklist-text"><strong>' + escapeHtml(s.label) + '</strong><span class="hint">' + escapeHtml(s.ready ? s.readyNote : s.pendingNote) + '</span></span>' +
+    '</button>';
+  }).join('');
+  const viewResultsCard = document.getElementById('viewResultsCard');
+  if (viewResultsCard) viewResultsCard.classList.toggle('disabled-hint', !r.step2);
+}
+
+// ---------------------------------------------------------------------
 // Reference panel view
 // ---------------------------------------------------------------------
 
@@ -425,6 +609,7 @@ function renderReferencePanelView() {
     (tbody || '<tr><td colspan="11" class="hint">No reference panel yet — paste one above.</td></tr>') + '</tbody>';
   document.getElementById('refPanelCount').textContent = rows.length + ' row(s)' +
     (state.referencePanel.updatedAt ? ' · last updated ' + new Date(state.referencePanel.updatedAt).toLocaleString() : '');
+  renderStep1Guidance();
 }
 
 /**
@@ -705,10 +890,10 @@ function batchOptionsHtml(selectedId) {
 
 function renderPasteView() {
   const disabled = state.referencePanel.rows.length === 0;
-  document.getElementById('pasteFormDisabledNotice').classList.toggle('hidden', !disabled);
   document.getElementById('parseGridBtn').disabled = disabled;
   renderBatchChips();
   updateGridMismatchWarning();
+  renderStep2Guidance();
 }
 
 /**
@@ -968,6 +1153,7 @@ function renderRunsView() {
   renderDerivedGroupsTable('Rerun', 'rerunGroupsTable');
   renderComparisonChecklists();
   renderComparisonsTable();
+  renderStep3Guidance();
 }
 
 function renderSampleColumnsTable() {
@@ -1322,7 +1508,68 @@ function renderRerunRollups() {
   }).join('');
 }
 
+// ---------------------------------------------------------------------
+// Export — PDF (via print) and a plain-text digest for chat/email
+// ---------------------------------------------------------------------
+
+function handleExportPdf() {
+  window.print();
+}
+
+/** Walks the already-rendered cards (not the raw calc results) so the text
+ * digest always matches exactly what's on screen, including which drilldowns
+ * the user chose to expand. */
+function buildSummaryTextDigest() {
+  const sections = [
+    { id: 'rerunRollups', label: 'Rerun Batch Overviews' },
+    { id: 'duplicateCards', label: 'Duplicate / VIP Analyses' },
+    { id: 'rerunCards', label: 'Rerun Comparisons (per sample)' },
+    { id: 'poolPlasmaCards', label: 'Pool Plasma Analyses' }
+  ];
+  const lines = ['Rerun Sample QC Summary — ' + new Date().toLocaleString(), ''];
+  sections.forEach(function (s) {
+    const container = document.getElementById(s.id);
+    const cards = container ? Array.prototype.slice.call(container.querySelectorAll('.card')) : [];
+    if (cards.length === 0) return;
+    lines.push(s.label + ':');
+    cards.forEach(function (card) {
+      const title = card.querySelector('.card-header h3');
+      const subtitle = card.querySelector('.card-subtitle');
+      const badge = card.querySelector('.badge');
+      const sentence = card.querySelector('.card-sentence');
+      const rec = card.querySelector('.recommendation');
+      lines.push('- ' + (title ? title.textContent.trim() : '') + ' [' + (badge ? badge.textContent.trim() : '') + ']');
+      if (subtitle) lines.push('  ' + subtitle.textContent.trim());
+      if (sentence) lines.push('  ' + sentence.textContent.trim());
+      if (rec) lines.push('  ' + rec.textContent.trim());
+    });
+    lines.push('');
+  });
+  return lines.join('\n');
+}
+
+function handleCopySummaryText() {
+  const text = buildSummaryTextDigest();
+  const btn = document.getElementById('copySummaryBtn');
+  const original = btn.textContent;
+  function flash(label) {
+    btn.textContent = label;
+    setTimeout(function () { btn.textContent = original; }, 1800);
+  }
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(function () { flash('✓ Copied!'); }, function () { alert(text); });
+  } else {
+    alert(text);
+  }
+}
+
 function renderSummary() {
+  renderStep4Guidance();
+  const printMeta = document.getElementById('printMeta');
+  if (printMeta) {
+    printMeta.textContent = 'Generated ' + new Date().toLocaleString() + ' · Batches: ' +
+      (state.batches.length ? state.batches.map(function (b) { return b.name; }).join(', ') : '—');
+  }
   renderRerunRollups();
 
   const dupGroups = derivedGroups('Duplicate');
@@ -1351,12 +1598,30 @@ function switchView(name) {
   // are sequential stages rather than unrelated tabs.
   document.querySelectorAll('.step-connector').forEach(function (c, i) { c.classList.toggle('done', i < activeIndex); });
   document.querySelectorAll('.view').forEach(function (v) { v.classList.toggle('active', v.getAttribute('data-view') === name); });
+  window.scrollTo(0, 0);
+  // Always re-render the view being entered so its guidance banner (and
+  // everything else on it) reflects the latest state, even if the state
+  // changed while the user was on a different tab.
+  if (name === 'home') renderHomeChecklist();
+  else if (name === 'setup') renderReferencePanelView();
+  else if (name === 'paste') renderPasteView();
+  else if (name === 'runs') renderRunsView();
+  else if (name === 'summary') renderSummary();
 }
 
 function wireStaticHandlers() {
   document.querySelectorAll('.nav-btn').forEach(function (btn) {
     btn.addEventListener('click', function () { switchView(btn.getAttribute('data-nav')); });
   });
+  document.getElementById('homeLink').addEventListener('click', function () { switchView('home'); });
+  // Any element anywhere with data-goto="<view>" (home action cards, checklist
+  // items, step-guidance "Continue" buttons) navigates the same way a nav tab does.
+  document.body.addEventListener('click', function (e) {
+    const gotoEl = e.target.closest('[data-goto]');
+    if (gotoEl) switchView(gotoEl.getAttribute('data-goto'));
+  });
+  document.getElementById('exportPdfBtn').addEventListener('click', handleExportPdf);
+  document.getElementById('copySummaryBtn').addEventListener('click', handleCopySummaryText);
   document.getElementById('assumptionsToggle').addEventListener('click', toggleAssumptionsPanel);
   document.getElementById('parseRefPanelBtn').addEventListener('click', handleParseReferencePanel);
   document.getElementById('loadDemoBtn').addEventListener('click', handleLoadDemoData);
@@ -1388,6 +1653,7 @@ function wireStaticHandlers() {
 
 function init() {
   renderAssumptionsBanner();
+  renderHomeChecklist();
   renderReferencePanelView();
   renderPasteView();
   renderRunsView();
