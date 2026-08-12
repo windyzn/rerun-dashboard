@@ -83,6 +83,34 @@
       .map(function (p) { return p.value; });
   }
 
+  /**
+   * True if every entry in a set of ParsedValues agrees on the same excluded
+   * kind (e.g. every replicate is BLQ, or every replicate is NR). This is a
+   * real, agreeing result — both/all replicates consistently below the
+   * detection limit, or consistently not reported — not a discrepancy, so
+   * callers should NOT treat it the same as a genuine mismatch (one BLQ +
+   * one numeric, BLQ mixed with NR, etc).
+   * @param {ParsedValue[]} parsedValues
+   * @param {'blq'|'nr'} kind
+   * @returns {boolean}
+   */
+  function allShareExcludedKind(parsedValues, kind) {
+    const list = parsedValues || [];
+    if (list.length === 0) return false;
+    return list.every(function (p) { return p && p.kind === kind; });
+  }
+
+  /**
+   * True if a set of replicates that couldn't produce a numeric result is
+   * nonetheless a consistent (agreeing) result — every replicate BLQ, or
+   * every replicate NR — rather than a real mismatch.
+   * @param {ParsedValue[]} parsedValues
+   * @returns {boolean}
+   */
+  function isConsistentNonNumericAgreement(parsedValues) {
+    return allShareExcludedKind(parsedValues, 'blq') || allShareExcludedKind(parsedValues, 'nr');
+  }
+
   // ---------------------------------------------------------------------
   // 2. Shared primitives
   // ---------------------------------------------------------------------
@@ -258,11 +286,16 @@
       const numeric = numericValues(row.replicates);
       const validCount = numeric.length;
       const intraCv = validCount >= 2 ? cvPercent(numeric) : null;
+      // All-BLQ or all-NR replicates agree with each other — that's a clean
+      // result (consistently below the detection limit / not reported), not
+      // a discrepancy, so it shouldn't be treated the same as a real
+      // mismatch (e.g. one BLQ + one numeric).
+      const excluded = validCount === 0 && !isConsistentNonNumericAgreement(row.replicates);
       return {
         protein: row.protein, mycoId: row.mycoId, peptideId: row.peptideId,
         peptide: row.peptide, lloq: row.lloq, uloq: row.uloq,
         replicates: row.replicates, validCount: validCount,
-        excluded: validCount === 0,
+        excluded: excluded,
         intraCv: intraCv
       };
     });
@@ -318,12 +351,19 @@
       const intraCv = rerunNumeric.length >= 2 ? cvPercent(rerunNumeric) : null;
       const r = ratio(firstNumeric, rerunNumeric);
       const interCv = interRunCv(firstNumeric, rerunNumeric);
+      // Both sides consistently BLQ, or both sides consistently NR, is a clean
+      // agreeing result (e.g. still below the detection limit after rerun) —
+      // not a discrepancy — so don't flag it the same as a real mismatch
+      // (first-run detected a value but the rerun didn't, or vice versa).
+      const bothSidesAgree = (allShareExcludedKind(row.firstRun, 'blq') && allShareExcludedKind(row.rerun, 'blq')) ||
+        (allShareExcludedKind(row.firstRun, 'nr') && allShareExcludedKind(row.rerun, 'nr'));
+      const excluded = (firstNumeric.length === 0 || rerunNumeric.length === 0) && !bothSidesAgree;
       return {
         protein: row.protein, mycoId: row.mycoId, peptideId: row.peptideId,
         peptide: row.peptide, lloq: row.lloq, uloq: row.uloq,
         firstRun: row.firstRun, rerun: row.rerun,
         firstRunValidCount: firstNumeric.length, rerunValidCount: rerunNumeric.length,
-        excluded: firstNumeric.length === 0 || rerunNumeric.length === 0,
+        excluded: excluded,
         intraCv: intraCv, ratio: r, ratioBucket: bucketForRatio(r), interCv: interCv
       };
     });
@@ -635,6 +675,8 @@
     parseValue: parseValue,
     isExcluded: isExcluded,
     numericValues: numericValues,
+    allShareExcludedKind: allShareExcludedKind,
+    isConsistentNonNumericAgreement: isConsistentNonNumericAgreement,
     mean: mean,
     sd: sd,
     cvPercent: cvPercent,

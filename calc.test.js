@@ -122,16 +122,78 @@ const F5_ROW = {
   uloq: 1630.5
 };
 
-test('F5/DVIVHPLPLK: BLQ/BLQ duplicate row is excluded, not 0 or NaN', function () {
+test('F5/DVIVHPLPLK: BLQ/BLQ duplicate row has no computable CV, not 0 or NaN', function () {
   const replicates = [Calc.parseValue('BLQ<1.4'), Calc.parseValue('BLQ<1.4')];
   const result = Calc.duplicateAnalysis([Object.assign({}, F5_ROW, { replicates: replicates })]);
   assert.strictEqual(result.perPeptide[0].intraCv, null);
-  assert.strictEqual(result.perPeptide[0].excluded, true);
+  // Both replicates agreeing BLQ is a clean, consistent result (still below
+  // the detection limit) — not a discrepancy — so it should NOT be flagged
+  // the same way a real mismatch would be.
+  assert.strictEqual(result.perPeptide[0].excluded, false);
   assert.strictEqual(result.perPeptide[0].validCount, 0);
   assert.strictEqual(result.counts.validPeptideCount, 0);
   // an all-excluded batch should PASS (no peptides can push it toward fail) rather
   // than blow up or read as a false FAIL.
   assert.strictEqual(result.verdict, 'PASS');
+});
+
+test('duplicateAnalysis: all-NR replicates also agree, not flagged as excluded', function () {
+  const replicates = [Calc.parseValue('NR'), Calc.parseValue('NR')];
+  const result = Calc.duplicateAnalysis([Object.assign({}, F5_ROW, { replicates: replicates })]);
+  assert.strictEqual(result.perPeptide[0].excluded, false);
+  assert.strictEqual(result.perPeptide[0].validCount, 0);
+});
+
+test('duplicateAnalysis: BLQ mixed with NR is a real mismatch, still flagged as excluded', function () {
+  const replicates = [Calc.parseValue('BLQ<1.4'), Calc.parseValue('NR')];
+  const result = Calc.duplicateAnalysis([Object.assign({}, F5_ROW, { replicates: replicates })]);
+  assert.strictEqual(result.perPeptide[0].excluded, true);
+});
+
+test('allShareExcludedKind / isConsistentNonNumericAgreement: exported helpers behave as documented', function () {
+  assert.strictEqual(Calc.allShareExcludedKind([Calc.parseValue('BLQ<1'), Calc.parseValue('BLQ<2')], 'blq'), true);
+  assert.strictEqual(Calc.allShareExcludedKind([Calc.parseValue('BLQ<1'), Calc.parseValue('NR')], 'blq'), false);
+  assert.strictEqual(Calc.allShareExcludedKind([], 'blq'), false);
+  assert.strictEqual(Calc.isConsistentNonNumericAgreement([Calc.parseValue('NR'), Calc.parseValue('NR')]), true);
+  assert.strictEqual(Calc.isConsistentNonNumericAgreement([Calc.parseValue('BLQ<1'), Calc.parseValue('100')]), false);
+});
+
+test('rerunAnalysis: first-run and rerun both consistently BLQ agree, not flagged as excluded', function () {
+  const row = Object.assign({}, F5_ROW, {
+    firstRun: [Calc.parseValue('BLQ<1.4')],
+    rerun: [Calc.parseValue('BLQ<1.4'), Calc.parseValue('BLQ<1.4')]
+  });
+  const result = Calc.rerunAnalysis([row]);
+  assert.strictEqual(result.perPeptide[0].excluded, false);
+});
+
+test('rerunAnalysis: first-run and rerun both consistently NR agree, not flagged as excluded', function () {
+  const row = Object.assign({}, F5_ROW, {
+    firstRun: [Calc.parseValue('NR')],
+    rerun: [Calc.parseValue('NR'), Calc.parseValue('NR')]
+  });
+  const result = Calc.rerunAnalysis([row]);
+  assert.strictEqual(result.perPeptide[0].excluded, false);
+});
+
+test('rerunAnalysis: first-run BLQ but rerun detected a value is a real mismatch, still flagged as excluded', function () {
+  const row = Object.assign({}, F5_ROW, {
+    firstRun: [Calc.parseValue('BLQ<1.4')],
+    rerun: [Calc.parseValue('42.0'), Calc.parseValue('43.0')]
+  });
+  const result = Calc.rerunAnalysis([row]);
+  // firstNumeric.length is 0 here, so it's excluded from ratio/interCv, and
+  // this is a genuine discrepancy (not an agreeing BLQ/BLQ or NR/NR case).
+  assert.strictEqual(result.perPeptide[0].excluded, true);
+});
+
+test('rerunAnalysis: first-run BLQ but rerun NR is a mismatched exclusion kind, still flagged as excluded', function () {
+  const row = Object.assign({}, F5_ROW, {
+    firstRun: [Calc.parseValue('BLQ<1.4')],
+    rerun: [Calc.parseValue('NR'), Calc.parseValue('NR')]
+  });
+  const result = Calc.rerunAnalysis([row]);
+  assert.strictEqual(result.perPeptide[0].excluded, true);
 });
 
 test('mixed row [100, BLQ<5, #VALUE!]: 1 valid value, CV not computable but not fully excluded', function () {
