@@ -27,6 +27,13 @@
   h2{ font-size:16px; margin-top:28px; }
   h3.subhead{ font-size:14px; margin-top:20px; color:var(--muted); }
   .hint{ color:var(--muted); font-size:13px; }
+  .modal-overlay{ position:fixed; inset:0; background:rgba(20,24,30,0.45); display:flex; align-items:center; justify-content:center; z-index:100; }
+  .modal-overlay.hidden{ display:none; }
+  .modal-box{ position:relative; background:#fff; border-radius:8px; padding:16px 20px; max-width:420px; width:90%; max-height:80vh; display:flex; flex-direction:column; box-shadow:0 8px 30px rgba(0,0,0,0.25); }
+  .modal-box h3{ margin:0 0 4px; font-size:15px; padding-right:24px; }
+  .modal-box-body{ overflow-y:auto; font-size:12.5px; color:var(--muted); background:#f8f9fb; border-radius:4px; padding:6px 8px; margin-top:8px; }
+  .modal-box-body div{ padding:1px 0; }
+  .modal-close-btn{ position:absolute; top:10px; right:14px; }
   textarea{ width:100%; font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:12.5px; padding:8px; border:1px solid var(--border); border-radius:6px; }
   input[type=text]{ padding:6px 8px; border:1px solid var(--border); border-radius:6px; font-size:13px; width:100%; }
   select{ padding:5px 6px; border:1px solid var(--border); border-radius:6px; font-size:12.5px; max-width:220px; }
@@ -101,6 +108,15 @@
 <div id="assumptionsPanel" class="assumptions-panel hidden">
   <strong>Unconfirmed assumptions in this build</strong> — each was built with a stated default, not yet confirmed with Xukun:
   <ul id="assumptionsList"></ul>
+</div>
+
+<div id="previewModal" class="modal-overlay hidden">
+  <div class="modal-box">
+    <button id="previewModalCloseBtn" class="link-btn modal-close-btn">✕ Close</button>
+    <h3 id="previewModalTitle"></h3>
+    <p class="hint">Every parsed value for this column, aligned to the reference panel.</p>
+    <div id="previewModalBody" class="modal-box-body"></div>
+  </div>
 </div>
 
 <main>
@@ -751,6 +767,7 @@ function handleParseGrid() {
   const expected = state.referencePanel.rows.length;
   const headerRowCount = detectHeaderRowCount(lines);
   const barcodeRow = headerRowCount > 0 ? lines[0].split('\t') : null;
+  const labelRow = headerRowCount === 2 ? lines[1].split('\t') : null;
   if (headerRowCount > 0) lines = lines.slice(headerRowCount);
 
   while (lines.length < expected) lines.push('');
@@ -764,7 +781,7 @@ function handleParseGrid() {
     rawColumns.push(splitLines.map(function (cells) { return Calc.parseValue(cells[c] != null ? cells[c] : ''); }));
   }
 
-  pendingGrid = { columnCount: columnCount, rawColumns: rawColumns };
+  pendingGrid = { columnCount: columnCount, rawColumns: rawColumns, labelRow: labelRow };
   pendingClassifications = [];
   for (let c = 0; c < columnCount; c++) {
     const prefillId = barcodeRow && barcodeRow[c] != null ? barcodeRow[c].trim() : '';
@@ -793,10 +810,12 @@ function renderClassifyStep() {
   stepEl.classList.remove('hidden');
 
   const rowsHtml = pendingClassifications.map(function (pc, i) {
-    const preview = formatReplicates(pendingGrid.rawColumns[i].slice(0, 2));
+    const labelCell = pendingGrid.labelRow && pendingGrid.labelRow[i] != null ? pendingGrid.labelRow[i].trim() : '';
+    const previewCell = '<span class="hint">' + (labelCell ? escapeHtml(labelCell) : '(no label row detected)') + '</span>' +
+      '<br><button data-action="open-preview" data-pi="' + i + '" class="link-btn">Preview data…</button>';
     const needsLink = pc.category === 'Rerun' || pc.category === 'Duplicate';
     return '<tr data-pending-index="' + i + '">' +
-      '<td>col ' + (i + 1) + '<br><span class="hint">' + preview + '…</span></td>' +
+      '<td>col ' + (i + 1) + '<br>' + previewCell + '</td>' +
       '<td><input type="text" data-pfield="sampleId" data-pi="' + i + '" value="' + escapeAttr(pc.sampleId) + '" style="width:110px;"></td>' +
       '<td><select data-pfield="category" data-pi="' + i + '">' + Calc.CATEGORY_VOCABULARY.map(function (cat) {
         return '<option value="' + cat + '"' + (cat === pc.category ? ' selected' : '') + '>' + cat + '</option>';
@@ -828,6 +847,8 @@ function handleClassifyTableChange(e) {
 }
 
 function handleClassifyTableClick(e) {
+  const previewBtn = e.target.closest('button[data-action="open-preview"]');
+  if (previewBtn) { openPreviewModal(Number(previewBtn.getAttribute('data-pi'))); return; }
   const btn = e.target.closest('button[data-action="remove-pending"]');
   if (!btn) return;
   const i = Number(btn.getAttribute('data-pi'));
@@ -836,6 +857,27 @@ function handleClassifyTableClick(e) {
   pendingClassifications.splice(i, 1);
   if (pendingGrid.columnCount === 0) { pendingGrid = null; pendingClassifications = []; }
   renderClassifyStep();
+}
+
+// ---------------------------------------------------------------------
+// Preview modal — shows every parsed value for one pending pasted column,
+// aligned with its reference-panel peptide, so a column can be sanity
+// checked before it's saved.
+// ---------------------------------------------------------------------
+
+function openPreviewModal(i) {
+  const values = pendingGrid.rawColumns[i];
+  const labelCell = pendingGrid.labelRow && pendingGrid.labelRow[i] != null ? pendingGrid.labelRow[i].trim() : '';
+  document.getElementById('previewModalTitle').textContent = 'Column ' + (i + 1) + (labelCell ? ' — ' + labelCell : '');
+  document.getElementById('previewModalBody').innerHTML = values.map(function (v, rowIdx) {
+    const refRow = state.referencePanel.rows[rowIdx];
+    const label = refRow ? (refRow.peptide || refRow.peptideId || ('row ' + (rowIdx + 1))) : ('row ' + (rowIdx + 1));
+    return '<div>' + (rowIdx + 1) + '. ' + escapeHtml(label) + ': ' + formatParsedValue(v) + '</div>';
+  }).join('');
+  document.getElementById('previewModal').classList.remove('hidden');
+}
+function closePreviewModal() {
+  document.getElementById('previewModal').classList.add('hidden');
 }
 
 function handleCancelClassify() {
@@ -1313,6 +1355,14 @@ function wireStaticHandlers() {
   document.getElementById('sampleColumnsTable').addEventListener('click', handleSampleColumnsTableClick);
   document.getElementById('createComparisonBtn').addEventListener('click', handleCreateComparison);
   document.getElementById('comparisonsTable').addEventListener('click', handleComparisonsTableClick);
+
+  document.getElementById('previewModalCloseBtn').addEventListener('click', closePreviewModal);
+  document.getElementById('previewModal').addEventListener('click', function (e) {
+    if (e.target.id === 'previewModal') closePreviewModal();
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') closePreviewModal();
+  });
 }
 
 function init() {
