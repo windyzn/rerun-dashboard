@@ -26,8 +26,9 @@
   .nav-btn.active .step-num{ background:#fff; color:var(--accent); }
   header h1{ cursor:pointer; }
   header h1:hover{ color:var(--accent-dark); }
-  .assumptions-toggle{ background:var(--warn-bg); color:var(--warn-text); border:1px solid #f0c36d; border-radius:999px; padding:6px 12px; cursor:pointer; font-size:12px; font-weight:600; flex-shrink:0; white-space:nowrap; transition:filter .15s ease; }
-  .assumptions-toggle:hover{ filter:brightness(0.97); }
+  .assumptions-toggle{ background:var(--warn-bg); color:var(--warn-text); border:1px solid #f0c36d; border-radius:50%; width:30px; height:30px; padding:0; cursor:pointer; font-size:14px; flex-shrink:0; display:flex; align-items:center; justify-content:center; position:relative; transition:filter .15s ease; }
+  .assumptions-toggle:hover{ filter:brightness(0.95); }
+  .assumptions-count{ position:absolute; top:-4px; right:-4px; background:var(--warn-text); color:#fff; border-radius:50%; min-width:15px; height:15px; padding:0 2px; font-size:9.5px; line-height:15px; text-align:center; font-weight:700; }
   .assumptions-panel{ background:#fff8ec; border-bottom:1px solid #f0c36d; padding:14px 24px; font-size:13px; }
   .assumptions-panel ul{ margin:8px 0 0; padding-left:20px; }
   .hidden{ display:none !important; }
@@ -480,7 +481,10 @@ function toggleExpand(cardId) {
 // ---------------------------------------------------------------------
 
 function renderAssumptionsBanner() {
-  document.getElementById('assumptionsToggle').textContent = '⚠ ' + Calc.ASSUMPTIONS.length + ' unconfirmed assumption(s) — click to review';
+  const btn = document.getElementById('assumptionsToggle');
+  const count = Calc.ASSUMPTIONS.length;
+  btn.innerHTML = '⚠<span class="assumptions-count">' + count + '</span>';
+  btn.title = count + ' unconfirmed assumption(s) — click to review';
   document.getElementById('assumptionsList').innerHTML = Calc.ASSUMPTIONS.map(function (a) {
     return '<li id="assumption-' + a.id + '">' + escapeHtml(a.text) + '</li>';
   }).join('');
