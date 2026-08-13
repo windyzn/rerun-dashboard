@@ -341,7 +341,8 @@ const REF_HEADERS = ['Measure Type', 'Biofluid/Location', 'Measure Identifier', 
 
 const RECOMMENDATION_LABEL = {
   'use-first-run': 'Use FIRST-RUN data for reporting (rerun marked research-only).',
-  'use-rerun': 'Use RERUN data for reporting (reproducibility confirmed via inter-run agreement).',
+  'use-rerun': 'Use RERUN data for reporting (it\'s internally reproducible; first-run is the likely outlier).',
+  'manual-review': 'Manual review needed — both intra- and inter-run CV failed, so no automatic recommendation.',
   'escalate-vendor': 'Escalate to vendor — recommend full batch rerun.'
 };
 
@@ -1493,7 +1494,7 @@ function renderRerunSampleCard(anchorId) {
   const hasVip = group.anchor.vip || group.members.some(function (m) { return m.vip; });
   const firstBatch = batchName(group.anchor.batchId);
   const rerunBatch = batchName(group.members[0].batchId);
-  const overallVerdict = res.decision.recommendation === 'escalate-vendor' ? 'FAIL' : 'PASS';
+  const overallVerdict = (res.decision.recommendation === 'escalate-vendor' || res.decision.recommendation === 'manual-review') ? 'FAIL' : 'PASS';
   const intraCounts = res.batchResult.intraCounts, interCounts = res.batchResult.interCounts;
   const facts = [
     'Intra-run CV <strong>' + res.decision.intraVerdict + '</strong> — ' + intraCounts.cv20 + '/' + intraCounts.validPeptideCount + ' peptides &gt;20% CV' +

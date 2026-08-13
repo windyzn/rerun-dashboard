@@ -585,7 +585,7 @@
    * @param {{cv10:number, cv20:number, cv30:number, validPeptideCount:number}} interCounts
    * @param {Record<string, number>} ratioBuckets - label -> count, from rerunAnalysis
    * @param {{sampleId:string, ratio:number}[]} [perSampleRatios] - used only for the directional-drift check
-   * @returns {{intraVerdict:('PASS'|'FAIL'), interVerdict:('PASS'|'FAIL'), recommendation:('use-first-run'|'use-rerun'|'escalate-vendor'), directionalDrift:Object, reasonCode:string}}
+   * @returns {{intraVerdict:('PASS'|'FAIL'), interVerdict:('PASS'|'FAIL'), recommendation:('use-first-run'|'use-rerun'|'manual-review'|'escalate-vendor'), directionalDrift:Object, reasonCode:string}}
    */
   function rerunDecision(intraCounts, interCounts, ratioBuckets, perSampleRatios) {
     // failPeptideCount folds in Xukun's BLQ/concentration-mismatch rule
@@ -603,16 +603,29 @@
 
     const drift = directionalDriftFlag(perSampleRatios || []);
 
+    // Corrected decision table (Aug 12 revision — the original draft had the two
+    // single-axis-fail branches backwards; verified against Xukun's real examples
+    // 228G789 and 473G835):
+    //   intra PASS, inter PASS -> either run is fine; report first-run, rerun is research-only
+    //   intra PASS, inter FAIL -> use RERUN (it's internally reproducible; first-run is the likely outlier — matches 473G835)
+    //   intra FAIL, inter PASS -> use FIRST-RUN (the rerun replicates disagree with each other, so neither is
+    //                             trustworthy even though their average happens to land near first-run — matches 228G789)
+    //   intra FAIL, inter FAIL -> not covered by Xukun's examples; flag for manual review, don't auto-decide
+    // "escalate-vendor" is reserved for the separate batch-wide signal in batchLevelEscalation() below,
+    // not returned from this per-sample table.
     let recommendation, reasonCode;
     if (!intraFail && !interFail) {
       recommendation = 'use-first-run';
       reasonCode = 'INTRA_PASS_INTER_PASS';
-    } else if (intraFail && !interFail) {
+    } else if (!intraFail && interFail) {
       recommendation = 'use-rerun';
+      reasonCode = 'INTRA_PASS_INTER_FAIL';
+    } else if (intraFail && !interFail) {
+      recommendation = 'use-first-run';
       reasonCode = 'INTRA_FAIL_INTER_PASS';
     } else {
-      recommendation = 'escalate-vendor';
-      reasonCode = (!intraFail && interFail) ? 'INTRA_PASS_INTER_FAIL' : 'INTRA_FAIL_INTER_FAIL';
+      recommendation = 'manual-review';
+      reasonCode = 'INTRA_FAIL_INTER_FAIL';
     }
     if (drift.flagged) reasonCode = 'SYSTEMATIC_DRIFT'; // batch-level flag augments, doesn't replace, the recommendation
 
@@ -634,9 +647,9 @@
   // start a fresh sentence after a period.
   const REASON_CLAUSES = {
     INTRA_PASS_INTER_PASS: 'both intra-run and inter-run agreement passed; using first-run data for reporting, with the rerun marked as research-only.',
-    INTRA_FAIL_INTER_PASS: 'intra-run CV failed, but inter-run agreement passed, confirming reproducibility independently; using the rerun for reporting.',
+    INTRA_FAIL_INTER_PASS: 'intra-run CV failed, so the rerun replicates disagree with each other and neither individual value can be trusted, even though their average happens to land near first-run; using first-run for reporting, with the rerun marked as research-only.',
     INTRA_PASS_INTER_FAIL: 'indicating a plate-to-plate shift rather than duplicate imprecision.',
-    INTRA_FAIL_INTER_FAIL: 'both intra-run and inter-run CV failed; recommend escalating to the vendor for a full batch rerun.',
+    INTRA_FAIL_INTER_FAIL: 'both intra-run and inter-run CV failed; flagging for manual review rather than an automatic recommendation.',
     SYSTEMATIC_DRIFT: 'indicating a systematic drift across the batch rather than isolated sample issues; recommend escalating to the vendor.'
   };
 

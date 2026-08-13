@@ -403,31 +403,31 @@ test('rerunDecision: intra PASS + inter PASS -> use-first-run', function () {
   assert.strictEqual(decision.reasonCode, 'INTRA_PASS_INTER_PASS');
 });
 
-test('rerunDecision: intra FAIL + inter PASS -> use-rerun (reproducibility confirmed)', function () {
+test('rerunDecision: intra FAIL + inter PASS -> use-first-run (rerun disagrees internally, matches 228G789)', function () {
   const intra = { cv10: 0, cv20: 25, cv30: 0, validPeptideCount: 95 };  // cv20=25, >20 -> FAIL
   const inter = { cv10: 0, cv20: 0, cv30: 5, validPeptideCount: 95 };   // PASS
   const decision = Calc.rerunDecision(intra, inter, inBandRatioBuckets(95, 95), []);
   assert.strictEqual(decision.intraVerdict, 'FAIL');
   assert.strictEqual(decision.interVerdict, 'PASS');
-  assert.strictEqual(decision.recommendation, 'use-rerun');
+  assert.strictEqual(decision.recommendation, 'use-first-run');
   assert.strictEqual(decision.reasonCode, 'INTRA_FAIL_INTER_PASS');
 });
 
-test('rerunDecision: both FAIL -> escalate-vendor', function () {
+test('rerunDecision: both FAIL -> manual-review (not covered by Xukun\'s examples, so don\'t auto-decide)', function () {
   const intra = { cv10: 0, cv20: 25, cv30: 0, validPeptideCount: 95 };
   const inter = { cv10: 0, cv20: 0, cv30: 25, validPeptideCount: 95 };
   const decision = Calc.rerunDecision(intra, inter, inBandRatioBuckets(95, 95), []);
   assert.strictEqual(decision.intraVerdict, 'FAIL');
   assert.strictEqual(decision.interVerdict, 'FAIL');
-  assert.strictEqual(decision.recommendation, 'escalate-vendor');
+  assert.strictEqual(decision.recommendation, 'manual-review');
 });
 
-test('rerunDecision: intra PASS but ratio out of band -> inter FAIL -> escalate-vendor', function () {
+test('rerunDecision: intra PASS but ratio out of band -> inter FAIL -> use-rerun (internally reproducible, matches 473G835)', function () {
   const intra = { cv10: 0, cv20: 5, cv30: 0, validPeptideCount: 95 };
   const inter = { cv10: 0, cv20: 0, cv30: 5, validPeptideCount: 95 };
   const decision = Calc.rerunDecision(intra, inter, inBandRatioBuckets(10, 95), []); // only 10/95 in band -> not majority
   assert.strictEqual(decision.interVerdict, 'FAIL');
-  assert.strictEqual(decision.recommendation, 'escalate-vendor');
+  assert.strictEqual(decision.recommendation, 'use-rerun');
   assert.strictEqual(decision.reasonCode, 'INTRA_PASS_INTER_FAIL');
 });
 
@@ -516,7 +516,7 @@ test('summarySentence: rerun failed sample WITHOUT a "despite passing intra" cla
   const s = Calc.summarySentence('rerun', {}, decision, perSampleSummary);
   assert.strictEqual(
     s,
-    'Inter-run CV passed for 1/2 samples; only X1 (40 peptides >20% CV) failed, both intra-run and inter-run CV failed; recommend escalating to the vendor for a full batch rerun.'
+    'Inter-run CV passed for 1/2 samples; only X1 (40 peptides >20% CV) failed, both intra-run and inter-run CV failed; flagging for manual review rather than an automatic recommendation.'
   );
 });
 
