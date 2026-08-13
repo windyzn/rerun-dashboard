@@ -80,11 +80,17 @@
   .card-facts li:last-child{ margin-bottom:0; }
   .recommendation{ background:var(--accent-soft); border:1px solid #cddcfb; border-radius:8px; padding:10px 12px; font-size:13px; margin:12px 0; }
   .card-metrics{ display:flex; align-items:flex-start; gap:32px; flex-wrap:wrap; margin:16px 0 22px; padding:16px 0 0; border-top:1px solid var(--border); }
-  .metric-donut-group{ display:flex; gap:14px; flex:0 0 auto; }
-  .metric-donut{ text-align:center; flex:0 0 auto; }
-  .donut text{ font-family:inherit; }
   .card-metrics .counts-table{ flex:1 1 320px; max-width:440px; margin-top:0; }
   .card-metrics .histogram{ flex:1 1 320px; margin:0; min-width:260px; }
+  .metric-bar-group{ display:flex; gap:24px; flex:0 0 auto; }
+  .metric-bar-group-title{ font-size:11px; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:0.03em; margin-bottom:8px; text-align:center; }
+  .cv-bar-chart{ display:flex; align-items:flex-end; gap:12px; flex:0 0 auto; }
+  .cv-bar-wrap{ display:flex; flex-direction:column; align-items:center; width:62px; }
+  .cv-bar-track{ height:90px; width:100%; display:flex; align-items:flex-end; }
+  .cv-bar{ width:100%; border-radius:4px 4px 0 0; min-height:2px; background:#c7d6f5; }
+  .cv-bar.cv-bar-fail{ background:var(--fail-text); }
+  .cv-bar-count{ font-size:12px; font-weight:700; margin-top:4px; color:var(--text); }
+  .cv-bar-label{ font-size:10px; color:var(--muted); margin-top:1px; text-align:center; line-height:1.25; }
   .counts-table{ max-width:460px; }
   .histogram{ display:flex; align-items:flex-end; gap:6px; height:110px; margin:14px 0 28px; }
   .hist-bar-wrap{ flex:1; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; height:100%; position:relative; }
@@ -435,33 +441,32 @@ function renderFactsList(facts) {
   if (items.length === 0) return '';
   return '<ul class="card-facts">' + items.map(function (f) { return '<li>' + f + '</li>'; }).join('') + '</ul>';
 }
-/** Small SVG ring chart — % of valid peptides within the pass threshold, at a glance.
- * The label wraps onto up to 2 short lines so it never gets clipped by the SVG bounds. */
-function renderDonut(pct, label, color) {
-  if (pct == null || !Number.isFinite(pct)) return '';
-  const r = 26, stroke = 7, c = 2 * Math.PI * r;
-  const offset = c - (Math.max(0, Math.min(100, pct)) / 100) * c;
-  const words = (label || '').split(' ');
-  const lines = words.length > 1 ? [words.slice(0, Math.ceil(words.length / 2)).join(' '), words.slice(Math.ceil(words.length / 2)).join(' ')] : [label];
-  const labelHtml = lines.map(function (line, i) {
-    return '<text x="38" y="' + (46 + i * 9) + '" text-anchor="middle" font-size="7.5" fill="var(--muted)">' + escapeHtml(line) + '</text>';
+/** Small vertical bar chart — counts of peptides >10/20/30% CV plus BLQ/concentration
+ * mismatches, so a card's numbers are visible as a shape, not just a table of digits.
+ * `failKey` marks whichever CV bar (cv20 or cv30) actually drives this card's fail
+ * threshold — that bar, plus the mismatch bar (always a fail), render in the fail
+ * color; the other CV bar is informational only. `title`, if given, labels the chart
+ * (used when a card shows more than one, e.g. rerun's Intra CV / Inter CV pair). */
+function renderCvBarChart(counts, failKey, title) {
+  const bars = [
+    { key: 'cv10', label: '&gt;10% CV', value: (counts && counts.cv10) || 0 },
+    { key: 'cv20', label: '&gt;20% CV', value: (counts && counts.cv20) || 0 },
+    { key: 'cv30', label: '&gt;30% CV', value: (counts && counts.cv30) || 0 },
+    { key: 'blq', label: 'BLQ mismatch', value: (counts && counts.blqMismatchCount) || 0 }
+  ];
+  const max = Math.max.apply(null, [1].concat(bars.map(function (b) { return b.value; })));
+  const barsHtml = bars.map(function (b) {
+    const heightPct = Math.max(2, Math.round((b.value / max) * 100));
+    const isFail = b.value > 0 && (b.key === failKey || b.key === 'blq');
+    return '<div class="cv-bar-wrap"><div class="cv-bar-track"><div class="cv-bar' + (isFail ? ' cv-bar-fail' : '') + '" style="height:' + heightPct + '%"></div></div>' +
+      '<div class="cv-bar-count">' + b.value + '</div><div class="cv-bar-label">' + b.label + '</div></div>';
   }).join('');
-  return '<svg class="donut" width="76" height="80" viewBox="0 0 76 80" role="img" aria-label="' + escapeAttr(Math.round(pct) + '% ' + label) + '">' +
-    '<circle cx="38" cy="34" r="' + r + '" fill="none" stroke="var(--border)" stroke-width="' + stroke + '"></circle>' +
-    '<circle cx="38" cy="34" r="' + r + '" fill="none" stroke="' + color + '" stroke-width="' + stroke + '" stroke-dasharray="' + c + '" stroke-dashoffset="' + offset + '" stroke-linecap="round" transform="rotate(-90 38 34)"></circle>' +
-    '<text x="38" y="31" text-anchor="middle" font-size="13.5" font-weight="700" fill="var(--text)">' + Math.round(pct) + '%</text>' +
-    labelHtml +
-  '</svg>';
+  return (title ? '<div class="metric-bar-group-title">' + escapeHtml(title) + '</div>' : '') + '<div class="cv-bar-chart">' + barsHtml + '</div>';
 }
-/** Lays counts table / donut(s) / histogram side by side so cards use the full card width. */
+/** Lays counts table / bar chart(s) / histogram side by side so cards use the full card width. */
 function renderCardMetrics(parts) {
   const html = (parts || []).filter(Boolean).join('');
   return html ? '<div class="card-metrics">' + html + '</div>' : '';
-}
-/** Peptides within the pass threshold, as a percent of valid peptides (for the donut). */
-function passPercent(counts) {
-  if (!counts || !counts.validPeptideCount) return null;
-  return Math.max(0, 100 * (counts.validPeptideCount - (counts.failPeptideCount || 0)) / counts.validPeptideCount);
 }
 /** Best-effort split of a calc.js-generated sentence into point-form bullets, for cards
  * that don't build their own facts array (their wording has no semicolons nested in
@@ -1472,8 +1477,8 @@ function renderDuplicateCard(anchorId) {
     { label: '&gt;30% CV', value: c.cv30 },
     { label: 'BLQ/concentration mismatches', value: c.blqMismatchCount }
   ]);
-  const donutHtml = renderDonut(passPercent(c), 'within threshold', res.verdict === 'PASS' ? 'var(--pass-accent)' : 'var(--fail-text)');
-  const metricsHtml = renderCardMetrics([donutHtml ? '<div class="metric-donut">' + donutHtml + '</div>' : '', countsHtml]);
+  const barChartHtml = renderCvBarChart(c, 'cv20', null);
+  const metricsHtml = renderCardMetrics([countsHtml, barChartHtml]);
   const isFlagged = function (row) { return row.excluded || row.blqMismatch || (row.intraCv != null && row.intraCv > Calc.THRESHOLDS.duplicateCvFailPercent); };
   const drilldownHtml = renderDrilldownTable(cardId, res.perPeptide, duplicateDrilldownColumns(), isFlagged);
   return renderCardShell({
@@ -1512,12 +1517,12 @@ function renderRerunSampleCard(anchorId) {
     { label: 'Inter-run BLQ/concentration mismatches (first-run vs. rerun — always a fail)', value: interCounts.blqMismatchCount },
     { label: 'Sample ratio (mean of peptide ratios)' + infoDot('inter-run-cv-definition'), value: formatNum(res.sampleRatio, 2) }
   ]);
-  const donutsHtml = '<div class="metric-donut-group">' +
-    '<div class="metric-donut">' + renderDonut(passPercent(intraCounts), 'Intra CV', res.decision.intraVerdict === 'PASS' ? 'var(--pass-accent)' : 'var(--fail-text)') + '</div>' +
-    '<div class="metric-donut">' + renderDonut(passPercent(interCounts), 'Inter CV', res.decision.interVerdict === 'PASS' ? 'var(--pass-accent)' : 'var(--fail-text)') + '</div>' +
+  const barChartsHtml = '<div class="metric-bar-group">' +
+    '<div>' + renderCvBarChart(intraCounts, 'cv20', 'Intra CV') + '</div>' +
+    '<div>' + renderCvBarChart(interCounts, 'cv30', 'Inter CV') + '</div>' +
   '</div>';
   const histogramHtml = renderHistogram(res.batchResult.ratioBuckets);
-  const metricsHtml = renderCardMetrics([donutsHtml, countsHtml, histogramHtml]);
+  const metricsHtml = renderCardMetrics([countsHtml, barChartsHtml, histogramHtml]);
   const isFlagged = function (row) {
     return row.excluded || row.intraBlqMismatch || row.interBlqMismatch ||
       (row.intraCv != null && row.intraCv > Calc.THRESHOLDS.rerunIntraFailPercent) ||
@@ -1554,9 +1559,9 @@ function renderPoolPlasmaCard(comparisonId) {
     { label: '&gt;30% CV (fail threshold: &gt;' + Calc.THRESHOLDS.poolPlasmaCvFailPeptideCount + ')', value: c.cv30 },
     { label: 'BLQ/concentration mismatches', value: c.blqMismatchCount }
   ]);
-  const donutHtml = renderDonut(passPercent(c), 'within threshold', res.batchResult.verdict === 'PASS' ? 'var(--pass-accent)' : 'var(--fail-text)');
+  const barChartHtml = renderCvBarChart(c, 'cv30', null);
   const histogramHtml = renderHistogram(res.batchResult.ratioBuckets);
-  const metricsHtml = renderCardMetrics([donutHtml ? '<div class="metric-donut">' + donutHtml + '</div>' : '', countsHtml, histogramHtml]);
+  const metricsHtml = renderCardMetrics([countsHtml, barChartHtml, histogramHtml]);
   const isFlagged = function (row) {
     return row.blqMismatch ||
       (row.rerunIntraCv != null && row.rerunIntraCv > Calc.THRESHOLDS.poolPlasmaCvFailPercent) ||
