@@ -203,6 +203,110 @@ test('mixed row [100, BLQ<5, #VALUE!]: 1 valid value, CV not computable but not 
   assert.strictEqual(row.validCount, 1);
   assert.strictEqual(row.excluded, false); // some data present, just insufficient for CV
   assert.strictEqual(row.intraCv, null);
+  // Per Xukun: a real concentration (100) alongside a BLQ replicate is a
+  // disagreement — one replicate detected the analyte, the other didn't —
+  // and fails on its own, independent of the (uncomputable) CV%.
+  assert.strictEqual(row.blqMismatch, true);
+});
+
+// ---------------------------------------------------------------------
+// Xukun's BLQ-agreement rule: both/all BLQ -> pass; one concentration +
+// one BLQ -> fail (independent of, and in addition to, CV% checks).
+// ---------------------------------------------------------------------
+
+test('hasBlqNumericMismatch: both BLQ is not a mismatch (agreement, passes)', function () {
+  assert.strictEqual(Calc.hasBlqNumericMismatch([Calc.parseValue('BLQ<1'), Calc.parseValue('BLQ<2')]), false);
+});
+
+test('hasBlqNumericMismatch: one concentration + one BLQ IS a mismatch (fails)', function () {
+  assert.strictEqual(Calc.hasBlqNumericMismatch([Calc.parseValue('42.0'), Calc.parseValue('BLQ<5')]), true);
+});
+
+test('duplicateAnalysis: a single BLQ/concentration mismatch peptide fails the batch even with 0% CV failures otherwise', function () {
+  const rows = [Object.assign({}, F5_ROW, { replicates: [Calc.parseValue('50'), Calc.parseValue('BLQ<5')] })];
+  // Pad with 20 clean, perfectly-agreeing peptides so the CV-based count alone would PASS.
+  for (let i = 0; i < 20; i++) {
+    rows.push(Object.assign({}, F5_ROW, { peptide: 'CLEAN' + i, replicates: [Calc.parseValue('100'), Calc.parseValue('100')] }));
+  }
+  const result = Calc.duplicateAnalysis(rows);
+  assert.strictEqual(result.counts.cv20, 0); // no CV-based failures
+  assert.strictEqual(result.counts.blqMismatchCount, 1);
+  assert.strictEqual(result.counts.failPeptideCount, 1);
+  // 1 failing peptide is still within the ">20" threshold, so this specific
+  // batch still passes overall — but the mismatch is counted and visible.
+  assert.strictEqual(result.verdict, 'PASS');
+});
+
+test('duplicateAnalysis: enough BLQ/concentration mismatches alone push the verdict to FAIL', function () {
+  const rows = [];
+  for (let i = 0; i < 21; i++) {
+    rows.push(Object.assign({}, F5_ROW, { peptide: 'MISMATCH' + i, replicates: [Calc.parseValue('50'), Calc.parseValue('BLQ<5')] }));
+  }
+  const result = Calc.duplicateAnalysis(rows);
+  assert.strictEqual(result.counts.cv20, 0); // still zero true CV failures — mismatches alone drive this
+  assert.strictEqual(result.counts.blqMismatchCount, 21);
+  assert.strictEqual(result.verdict, 'FAIL');
+});
+
+test('rerunAnalysis: rerun replicates disagreeing among themselves (BLQ + concentration) is an intra-run mismatch', function () {
+  // First-run is NR here (rather than a concentration or BLQ) specifically to
+  // isolate the intra-run signal — with a real first-run value present, the
+  // rerun's own BLQ replicate would also legitimately trip the inter-run
+  // mismatch (see the "disagreeing on both axes" test below).
+  const row = Object.assign({}, F5_ROW, { firstRun: [Calc.parseValue('NR')], rerun: [Calc.parseValue('95'), Calc.parseValue('BLQ<5')] });
+  const result = Calc.rerunAnalysis([row]);
+  assert.strictEqual(result.perPeptide[0].intraBlqMismatch, true);
+  assert.strictEqual(result.perPeptide[0].interBlqMismatch, false);
+  assert.strictEqual(result.intraCounts.blqMismatchCount, 1);
+});
+
+test('rerunAnalysis: a rerun replicate set that is internally split AND conflicts with a real first-run value trips both axes', function () {
+  const row = Object.assign({}, F5_ROW, { firstRun: [Calc.parseValue('100')], rerun: [Calc.parseValue('95'), Calc.parseValue('BLQ<5')] });
+  const result = Calc.rerunAnalysis([row]);
+  // The rerun replicates disagree with each other (intra) AND, separately,
+  // first-run's real concentration disagrees with the rerun's BLQ replicate
+  // (inter) — both are true statements about this peptide's data.
+  assert.strictEqual(result.perPeptide[0].intraBlqMismatch, true);
+  assert.strictEqual(result.perPeptide[0].interBlqMismatch, true);
+});
+
+test('rerunAnalysis: first-run BLQ but rerun detected a concentration is an inter-run mismatch', function () {
+  const row = Object.assign({}, F5_ROW, { firstRun: [Calc.parseValue('BLQ<5')], rerun: [Calc.parseValue('40'), Calc.parseValue('42')] });
+  const result = Calc.rerunAnalysis([row]);
+  assert.strictEqual(result.perPeptide[0].intraBlqMismatch, false); // rerun replicates agree with each other
+  assert.strictEqual(result.perPeptide[0].interBlqMismatch, true); // but disagree with first-run
+  assert.strictEqual(result.interCounts.blqMismatchCount, 1);
+});
+
+test('rerunDecision: an inter-run BLQ mismatch alone is enough to fail inter-run agreement', function () {
+  const intraCounts = { cv20: 0, failPeptideCount: 0 };
+  const interCounts = { cv30: 0, failPeptideCount: 21 }; // e.g. 21 BLQ/concentration mismatches, 0 true CV failures
+  const decision = Calc.rerunDecision(intraCounts, interCounts, {}, []);
+  assert.strictEqual(decision.interVerdict, 'FAIL');
+});
+
+test('poolPlasmaAnalysis: a BLQ/concentration mismatch between sides is counted independent of CV%', function () {
+  const firstRow = Object.assign({}, F5_ROW, { poolReplicates: [Calc.parseValue('BLQ<5')] });
+  const rerunRow = Object.assign({}, F5_ROW, { poolReplicates: [Calc.parseValue('60')] });
+  const result = Calc.poolPlasmaAnalysis([firstRow], [rerunRow]);
+  assert.strictEqual(result.perPeptide[0].blqMismatch, true);
+  assert.strictEqual(result.counts.blqMismatchCount, 1);
+  assert.strictEqual(result.counts.cv30, 0); // no CV computable at all (single replicate each side)
+  assert.strictEqual(result.counts.failPeptideCount, 1);
+  assert.strictEqual(result.verdict, 'PASS'); // 1 mismatched peptide alone is still within the >20 threshold
+});
+
+test('poolPlasmaAnalysis: enough cross-side BLQ/concentration mismatches alone push the verdict to FAIL', function () {
+  const firstRows = [];
+  const rerunRows = [];
+  for (let i = 0; i < 21; i++) {
+    firstRows.push(Object.assign({}, F5_ROW, { peptide: 'MISMATCH' + i, poolReplicates: [Calc.parseValue('BLQ<5')] }));
+    rerunRows.push(Object.assign({}, F5_ROW, { peptide: 'MISMATCH' + i, poolReplicates: [Calc.parseValue('60')] }));
+  }
+  const result = Calc.poolPlasmaAnalysis(firstRows, rerunRows);
+  assert.strictEqual(result.counts.cv30, 0);
+  assert.strictEqual(result.counts.blqMismatchCount, 21);
+  assert.strictEqual(result.verdict, 'FAIL');
 });
 
 // ---------------------------------------------------------------------

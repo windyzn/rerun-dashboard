@@ -111,6 +111,31 @@
     return allShareExcludedKind(parsedValues, 'blq') || allShareExcludedKind(parsedValues, 'nr');
   }
 
+  /**
+   * True if at least one entry in a set of ParsedValues is the given kind.
+   * @param {ParsedValue[]} parsedValues
+   * @param {'numeric'|'blq'|'nr'|'error'|'empty'} kind
+   * @returns {boolean}
+   */
+  function hasKind(parsedValues, kind) {
+    return (parsedValues || []).some(function (p) { return p && p.kind === kind; });
+  }
+
+  /**
+   * Xukun's rule: if every replicate being compared agrees they're BLQ, that's
+   * a clean pass (still below the detection limit). If some are BLQ and
+   * others carry a real measured concentration, that's a genuine disagreement
+   * — one replicate detected the analyte, the other didn't — and it FAILS,
+   * regardless of what the CV% would say (a CV can't even be computed from
+   * only one concentration). This is a distinct failure mode from CV% and is
+   * always checked in addition to it, never instead of it.
+   * @param {ParsedValue[]} parsedValues
+   * @returns {boolean}
+   */
+  function hasBlqNumericMismatch(parsedValues) {
+    return hasKind(parsedValues, 'blq') && hasKind(parsedValues, 'numeric');
+  }
+
   // ---------------------------------------------------------------------
   // 2. Shared primitives
   // ---------------------------------------------------------------------
@@ -291,23 +316,34 @@
       // a discrepancy, so it shouldn't be treated the same as a real
       // mismatch (e.g. one BLQ + one numeric).
       const excluded = validCount === 0 && !isConsistentNonNumericAgreement(row.replicates);
+      // Xukun's rule: some replicates BLQ and others carrying a real
+      // concentration is a fail on its own — independent of (and in addition
+      // to) the CV% check, since a CV can't even be computed from just one
+      // numeric replicate.
+      const blqMismatch = hasBlqNumericMismatch(row.replicates);
       return {
         protein: row.protein, mycoId: row.mycoId, peptideId: row.peptideId,
         peptide: row.peptide, lloq: row.lloq, uloq: row.uloq,
         replicates: row.replicates, validCount: validCount,
         excluded: excluded,
+        blqMismatch: blqMismatch,
         intraCv: intraCv
       };
     });
 
     const cvCounts = countCvThresholds(perPeptide.map(function (p) { return p.intraCv; }));
     const validPeptideCount = perPeptide.filter(function (p) { return p.validCount >= 2; }).length;
-    const verdict = cvCounts.cv20 > THRESHOLDS.duplicateCvFailPeptideCount ? 'FAIL' : 'PASS';
+    const blqMismatchCount = perPeptide.filter(function (p) { return p.blqMismatch; }).length;
+    const failPeptideCount = cvCounts.cv20 + blqMismatchCount;
+    const verdict = failPeptideCount > THRESHOLDS.duplicateCvFailPeptideCount ? 'FAIL' : 'PASS';
 
     return {
       type: 'duplicate',
       perPeptide: perPeptide,
-      counts: { cv10: cvCounts.cv10, cv20: cvCounts.cv20, cv30: cvCounts.cv30, validPeptideCount: validPeptideCount },
+      counts: {
+        cv10: cvCounts.cv10, cv20: cvCounts.cv20, cv30: cvCounts.cv30, validPeptideCount: validPeptideCount,
+        blqMismatchCount: blqMismatchCount, failPeptideCount: failPeptideCount
+      },
       verdict: verdict
     };
   }
@@ -358,12 +394,20 @@
       const bothSidesAgree = (allShareExcludedKind(row.firstRun, 'blq') && allShareExcludedKind(row.rerun, 'blq')) ||
         (allShareExcludedKind(row.firstRun, 'nr') && allShareExcludedKind(row.rerun, 'nr'));
       const excluded = (firstNumeric.length === 0 || rerunNumeric.length === 0) && !bothSidesAgree;
+      // Xukun's rule, applied on two axes: the rerun's OWN replicates disagreeing
+      // on BLQ vs numeric is an intra-run problem (independent of intra-CV%);
+      // first-run vs rerun disagreeing is an inter-run problem (independent of
+      // inter-CV%) — one run detected the analyte, the other didn't.
+      const intraBlqMismatch = hasBlqNumericMismatch(row.rerun);
+      const interBlqMismatch = (hasKind(row.firstRun, 'blq') && rerunNumeric.length > 0) ||
+        (firstNumeric.length > 0 && hasKind(row.rerun, 'blq'));
       return {
         protein: row.protein, mycoId: row.mycoId, peptideId: row.peptideId,
         peptide: row.peptide, lloq: row.lloq, uloq: row.uloq,
         firstRun: row.firstRun, rerun: row.rerun,
         firstRunValidCount: firstNumeric.length, rerunValidCount: rerunNumeric.length,
         excluded: excluded,
+        intraBlqMismatch: intraBlqMismatch, interBlqMismatch: interBlqMismatch,
         intraCv: intraCv, ratio: r, ratioBucket: bucketForRatio(r), interCv: interCv
       };
     });
@@ -372,6 +416,8 @@
     const interCounts = countCvThresholds(perPeptide.map(function (p) { return p.interCv; }));
     const intraValidPeptideCount = perPeptide.filter(function (p) { return p.rerunValidCount >= 2; }).length;
     const interValidPeptideCount = perPeptide.filter(function (p) { return p.ratio != null; }).length;
+    const intraBlqMismatchCount = perPeptide.filter(function (p) { return p.intraBlqMismatch; }).length;
+    const interBlqMismatchCount = perPeptide.filter(function (p) { return p.interBlqMismatch; }).length;
 
     const ratioBuckets = {};
     RATIO_BUCKETS.forEach(function (b) { ratioBuckets[b.label] = 0; });
@@ -382,8 +428,14 @@
     return {
       type: 'rerun',
       perPeptide: perPeptide,
-      intraCounts: { cv10: intraCounts.cv10, cv20: intraCounts.cv20, cv30: intraCounts.cv30, validPeptideCount: intraValidPeptideCount },
-      interCounts: { cv10: interCounts.cv10, cv20: interCounts.cv20, cv30: interCounts.cv30, validPeptideCount: interValidPeptideCount },
+      intraCounts: {
+        cv10: intraCounts.cv10, cv20: intraCounts.cv20, cv30: intraCounts.cv30, validPeptideCount: intraValidPeptideCount,
+        blqMismatchCount: intraBlqMismatchCount, failPeptideCount: intraCounts.cv20 + intraBlqMismatchCount
+      },
+      interCounts: {
+        cv10: interCounts.cv10, cv20: interCounts.cv20, cv30: interCounts.cv30, validPeptideCount: interValidPeptideCount,
+        blqMismatchCount: interBlqMismatchCount, failPeptideCount: interCounts.cv30 + interBlqMismatchCount
+      },
       ratioBuckets: ratioBuckets
     };
   }
@@ -418,11 +470,16 @@
       const firstIntraCv = firstNumeric.length >= 2 ? cvPercent(firstNumeric) : null;
       const rerunIntraCv = rerunNumeric.length >= 2 ? cvPercent(rerunNumeric) : null;
       const r = ratio(firstNumeric, rerunNumeric);
+      // Xukun's rule, applied across BOTH sides together — side A and side B
+      // are literally "two samples" being compared here: if either side's own
+      // replicates disagree on BLQ vs numeric, or the two sides disagree with
+      // each other, that's a fail independent of CV%.
+      const blqMismatch = hasBlqNumericMismatch((firstRow.poolReplicates || []).concat(rerunRow.poolReplicates || []));
       perPeptide.push({
         protein: firstRow.protein, mycoId: firstRow.mycoId, peptideId: firstRow.peptideId,
         peptide: firstRow.peptide, lloq: firstRow.lloq, uloq: firstRow.uloq,
         firstRunReplicates: firstRow.poolReplicates, rerunReplicates: rerunRow.poolReplicates,
-        firstIntraCv: firstIntraCv, rerunIntraCv: rerunIntraCv,
+        firstIntraCv: firstIntraCv, rerunIntraCv: rerunIntraCv, blqMismatch: blqMismatch,
         ratio: r, ratioBucket: bucketForRatio(r)
       });
     }
@@ -432,7 +489,9 @@
     // the pool-plasma 30% threshold (see ASSUMPTIONS: 'threshold-inconsistency').
     const cvCounts = countCvThresholds(perPeptide.map(function (p) { return p.rerunIntraCv; }));
     const validPeptideCount = perPeptide.filter(function (p) { return p.rerunIntraCv != null; }).length;
-    const verdict = cvCounts.cv30 > THRESHOLDS.poolPlasmaCvFailPeptideCount ? 'FAIL' : 'PASS';
+    const blqMismatchCount = perPeptide.filter(function (p) { return p.blqMismatch; }).length;
+    const failPeptideCount = cvCounts.cv30 + blqMismatchCount;
+    const verdict = failPeptideCount > THRESHOLDS.poolPlasmaCvFailPeptideCount ? 'FAIL' : 'PASS';
 
     const ratioBuckets = {};
     RATIO_BUCKETS.forEach(function (b) { ratioBuckets[b.label] = 0; });
@@ -443,7 +502,10 @@
     return {
       type: 'poolPlasma',
       perPeptide: perPeptide,
-      counts: { cv10: cvCounts.cv10, cv20: cvCounts.cv20, cv30: cvCounts.cv30, validPeptideCount: validPeptideCount },
+      counts: {
+        cv10: cvCounts.cv10, cv20: cvCounts.cv20, cv30: cvCounts.cv30, validPeptideCount: validPeptideCount,
+        blqMismatchCount: blqMismatchCount, failPeptideCount: failPeptideCount
+      },
       ratioBuckets: ratioBuckets,
       verdict: verdict
     };
@@ -526,13 +588,18 @@
    * @returns {{intraVerdict:('PASS'|'FAIL'), interVerdict:('PASS'|'FAIL'), recommendation:('use-first-run'|'use-rerun'|'escalate-vendor'), directionalDrift:Object, reasonCode:string}}
    */
   function rerunDecision(intraCounts, interCounts, ratioBuckets, perSampleRatios) {
-    const intraFail = intraCounts.cv20 > THRESHOLDS.rerunIntraFailPeptideCount;
+    // failPeptideCount folds in Xukun's BLQ/concentration-mismatch rule
+    // alongside the CV% count; fall back to raw cv20/cv30 for callers that
+    // pass in counts objects from before that field existed.
+    const intraFailCount = intraCounts.failPeptideCount != null ? intraCounts.failPeptideCount : intraCounts.cv20;
+    const interFailCount = interCounts.failPeptideCount != null ? interCounts.failPeptideCount : interCounts.cv30;
+    const intraFail = intraFailCount > THRESHOLDS.rerunIntraFailPeptideCount;
 
     const totalBuckets = Object.keys(ratioBuckets || {}).reduce(function (sum, k) { return sum + ratioBuckets[k]; }, 0);
     const inBand = acceptableBandCount(ratioBuckets || {});
     // "ratio in band" = majority of peptides land in the 0.8-1.2 acceptable band.
     const ratioInBand = totalBuckets === 0 ? true : (inBand / totalBuckets) >= 0.5;
-    const interFail = interCounts.cv30 > THRESHOLDS.rerunInterFailPeptideCount || !ratioInBand;
+    const interFail = interFailCount > THRESHOLDS.rerunInterFailPeptideCount || !ratioInBand;
 
     const drift = directionalDriftFlag(perSampleRatios || []);
 
@@ -587,16 +654,20 @@
   function summarySentence(type, batchResult, decision, perSampleSummary) {
     if (type === 'duplicate') {
       const c = batchResult.counts;
+      const mismatchClause = c.blqMismatchCount > 0
+        ? '; ' + c.blqMismatchCount + ' peptide(s) had a BLQ/concentration mismatch (one replicate detected, another didn\'t)' : '';
       return 'Intra-run CV ' + (batchResult.verdict === 'PASS' ? 'passed' : 'FAILED') +
         ' (' + c.cv20 + '/' + c.validPeptideCount + ' peptides >20% CV, threshold is >' +
-        THRESHOLDS.duplicateCvFailPeptideCount + ').';
+        THRESHOLDS.duplicateCvFailPeptideCount + ')' + mismatchClause + '.';
     }
 
     if (type === 'poolPlasma') {
       const c = batchResult.counts;
+      const mismatchClause = c.blqMismatchCount > 0
+        ? '; ' + c.blqMismatchCount + ' peptide(s) had a BLQ/concentration mismatch between sides' : '';
       return 'Pool plasma intra-run CV ' + (batchResult.verdict === 'PASS' ? 'passed' : 'FAILED') +
         ' (' + c.cv30 + '/' + c.validPeptideCount + ' peptides >30% CV, threshold is >' +
-        THRESHOLDS.poolPlasmaCvFailPeptideCount + ').';
+        THRESHOLDS.poolPlasmaCvFailPeptideCount + ')' + mismatchClause + '.';
     }
 
     if (type === 'rerun') {
@@ -676,6 +747,8 @@
     isExcluded: isExcluded,
     numericValues: numericValues,
     allShareExcludedKind: allShareExcludedKind,
+    hasKind: hasKind,
+    hasBlqNumericMismatch: hasBlqNumericMismatch,
     isConsistentNonNumericAgreement: isConsistentNonNumericAgreement,
     mean: mean,
     sd: sd,
