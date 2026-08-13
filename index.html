@@ -1499,7 +1499,7 @@ function renderDuplicateCard(anchorId) {
     { label: '&gt;10% CV', value: c.cv10, barValue: c.cv10 },
     { label: '&gt;20% CV (fail threshold: &gt;' + Calc.THRESHOLDS.duplicateCvFailPeptideCount + ')', value: c.cv20, barValue: c.cv20, fail: true },
     { label: '&gt;30% CV', value: c.cv30, barValue: c.cv30 },
-    { label: 'BLQ/concentration mismatches', value: c.blqMismatchCount, barValue: c.blqMismatchCount, fail: true }
+    { label: 'BLQ/concentration mismatches', value: c.blqMismatchCount, barValue: c.blqMismatchCount }
   ]);
   const metricsHtml = renderCardMetrics([countsHtml]);
   const isFlagged = function (row) { return row.excluded || row.blqMismatch || (row.intraCv != null && row.intraCv > Calc.THRESHOLDS.duplicateCvFailPercent); };
@@ -1535,9 +1535,9 @@ function renderRerunSampleCard(anchorId) {
   const recommendationHtml = '<p class="recommendation"><strong>Recommendation:</strong> ' + escapeHtml(RECOMMENDATION_LABEL[res.decision.recommendation]) + '</p>';
   const countsHtml = renderCountsTable([
     { label: 'Intra-run &gt;20% CV (fail &gt;' + Calc.THRESHOLDS.rerunIntraFailPeptideCount + ')', value: intraCounts.cv20 + '/' + intraCounts.validPeptideCount, barValue: intraCounts.cv20, fail: true },
-    { label: 'Intra-run BLQ/concentration mismatches', value: intraCounts.blqMismatchCount, barValue: intraCounts.blqMismatchCount, fail: true },
+    { label: 'Intra-run BLQ/concentration mismatches', value: intraCounts.blqMismatchCount, barValue: intraCounts.blqMismatchCount },
     { label: 'Inter-run &gt;30% CV (fail &gt;' + Calc.THRESHOLDS.rerunInterFailPeptideCount + ')', value: interCounts.cv30 + '/' + interCounts.validPeptideCount, barValue: interCounts.cv30, fail: true },
-    { label: 'Inter-run BLQ/concentration mismatches (first-run vs. rerun — always a fail)', value: interCounts.blqMismatchCount, barValue: interCounts.blqMismatchCount, fail: true },
+    { label: 'Inter-run BLQ/concentration mismatches (first-run vs. rerun — always a fail)', value: interCounts.blqMismatchCount, barValue: interCounts.blqMismatchCount },
     { label: 'Sample ratio (mean of peptide ratios)' + infoDot('inter-run-cv-definition'), value: formatNum(res.sampleRatio, 2) }
   ]);
   const histogramHtml = renderHistogram(res.batchResult.ratioBuckets);
@@ -1576,7 +1576,7 @@ function renderPoolPlasmaCard(comparisonId) {
   const factsHtml = renderFactsList(facts);
   const countsHtml = renderCountsTable([
     { label: '&gt;30% CV (fail threshold: &gt;' + Calc.THRESHOLDS.poolPlasmaCvFailPeptideCount + ')', value: c.cv30, barValue: c.cv30, fail: true },
-    { label: 'BLQ/concentration mismatches', value: c.blqMismatchCount, barValue: c.blqMismatchCount, fail: true }
+    { label: 'BLQ/concentration mismatches', value: c.blqMismatchCount, barValue: c.blqMismatchCount }
   ]);
   const histogramHtml = renderHistogram(res.batchResult.ratioBuckets);
   const metricsHtml = renderCardMetrics([countsHtml, histogramHtml]);
