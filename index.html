@@ -75,7 +75,16 @@
   .flag-pills{ margin:8px 0; display:flex; gap:6px; flex-wrap:wrap; }
   .flag-pill{ background:var(--warn-bg); color:var(--warn-text); border:1px solid #f0c36d; border-radius:6px; padding:4px 8px; font-size:12px; }
   .card-sentence{ font-size:13.5px; line-height:1.55; }
-  .recommendation{ background:var(--accent-soft); border:1px solid #cddcfb; border-radius:8px; padding:10px 12px; font-size:13px; }
+  .card-facts{ margin:10px 0 4px; padding-left:20px; font-size:13.5px; line-height:1.6; }
+  .card-facts li{ margin-bottom:4px; }
+  .card-facts li:last-child{ margin-bottom:0; }
+  .recommendation{ background:var(--accent-soft); border:1px solid #cddcfb; border-radius:8px; padding:10px 12px; font-size:13px; margin:12px 0; }
+  .card-metrics{ display:flex; align-items:flex-start; gap:32px; flex-wrap:wrap; margin:16px 0 22px; padding:16px 0 0; border-top:1px solid var(--border); }
+  .metric-donut-group{ display:flex; gap:14px; flex:0 0 auto; }
+  .metric-donut{ text-align:center; flex:0 0 auto; }
+  .donut text{ font-family:inherit; }
+  .card-metrics .counts-table{ flex:1 1 320px; max-width:440px; margin-top:0; }
+  .card-metrics .histogram{ flex:1 1 320px; margin:0; min-width:260px; }
   .counts-table{ max-width:460px; }
   .histogram{ display:flex; align-items:flex-end; gap:6px; height:110px; margin:14px 0 28px; }
   .hist-bar-wrap{ flex:1; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; height:100%; position:relative; }
@@ -83,7 +92,8 @@
   .hist-bar.in-band{ background:var(--accent); }
   .hist-count{ font-size:11px; margin-top:2px; }
   .hist-label{ font-size:10px; color:var(--muted); white-space:nowrap; position:absolute; top:100%; margin-top:14px; transform:rotate(-40deg); transform-origin:top left; }
-  .drilldown{ margin-top:12px; border-top:1px solid var(--border); padding-top:12px; }
+  .card-details-toggle{ margin-top:16px; }
+  .drilldown{ margin-top:16px; border-top:1px solid var(--border); padding-top:16px; }
   .drilldown-controls{ display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; font-size:12.5px; }
   .drilldown-scroll{ overflow:auto; max-height:480px; }
   .flagged-row{ background:#fff8f0; }
@@ -418,6 +428,47 @@ function renderCountsTable(rows) {
     return '<tr><td>' + r.label + '</td><td>' + r.value + '</td></tr>';
   }).join('') + '</tbody></table>';
 }
+/** Point-form summary of a card's key facts, replacing a single dense paragraph. */
+function renderFactsList(facts) {
+  const items = (facts || []).filter(Boolean);
+  if (items.length === 0) return '';
+  return '<ul class="card-facts">' + items.map(function (f) { return '<li>' + f + '</li>'; }).join('') + '</ul>';
+}
+/** Small SVG ring chart — % of valid peptides within the pass threshold, at a glance.
+ * The label wraps onto up to 2 short lines so it never gets clipped by the SVG bounds. */
+function renderDonut(pct, label, color) {
+  if (pct == null || !Number.isFinite(pct)) return '';
+  const r = 26, stroke = 7, c = 2 * Math.PI * r;
+  const offset = c - (Math.max(0, Math.min(100, pct)) / 100) * c;
+  const words = (label || '').split(' ');
+  const lines = words.length > 1 ? [words.slice(0, Math.ceil(words.length / 2)).join(' '), words.slice(Math.ceil(words.length / 2)).join(' ')] : [label];
+  const labelHtml = lines.map(function (line, i) {
+    return '<text x="38" y="' + (46 + i * 9) + '" text-anchor="middle" font-size="7.5" fill="var(--muted)">' + escapeHtml(line) + '</text>';
+  }).join('');
+  return '<svg class="donut" width="76" height="80" viewBox="0 0 76 80" role="img" aria-label="' + escapeAttr(Math.round(pct) + '% ' + label) + '">' +
+    '<circle cx="38" cy="34" r="' + r + '" fill="none" stroke="var(--border)" stroke-width="' + stroke + '"></circle>' +
+    '<circle cx="38" cy="34" r="' + r + '" fill="none" stroke="' + color + '" stroke-width="' + stroke + '" stroke-dasharray="' + c + '" stroke-dashoffset="' + offset + '" stroke-linecap="round" transform="rotate(-90 38 34)"></circle>' +
+    '<text x="38" y="31" text-anchor="middle" font-size="13.5" font-weight="700" fill="var(--text)">' + Math.round(pct) + '%</text>' +
+    labelHtml +
+  '</svg>';
+}
+/** Lays counts table / donut(s) / histogram side by side so cards use the full card width. */
+function renderCardMetrics(parts) {
+  const html = (parts || []).filter(Boolean).join('');
+  return html ? '<div class="card-metrics">' + html + '</div>' : '';
+}
+/** Peptides within the pass threshold, as a percent of valid peptides (for the donut). */
+function passPercent(counts) {
+  if (!counts || !counts.validPeptideCount) return null;
+  return Math.max(0, 100 * (counts.validPeptideCount - (counts.failPeptideCount || 0)) / counts.validPeptideCount);
+}
+/** Best-effort split of a calc.js-generated sentence into point-form bullets, for cards
+ * that don't build their own facts array (their wording has no semicolons nested in
+ * parens, so splitting on '; ' / '. ' is safe). */
+function splitFactsFromSentence(sentence) {
+  if (!sentence) return [];
+  return sentence.split(/;\s*|\.\s+(?=[A-Z0-9])/).map(function (s) { return s.trim().replace(/\.$/, ''); }).filter(Boolean);
+}
 function renderHistogram(buckets) {
   const values = Calc.RATIO_BUCKETS.map(function (b) { return buckets[b.label] || 0; });
   const max = Math.max.apply(null, [1].concat(values));
@@ -438,11 +489,11 @@ function renderCardShell(opts) {
       '<span class="badge badge-' + (opts.verdict === 'PASS' ? 'pass' : 'fail') + '">' + opts.verdict + '</span>' +
     '</div>' +
     (opts.extraFlagsHtml ? '<div class="flag-pills">' + opts.extraFlagsHtml + '</div>' : '') +
-    (opts.sentence ? '<p class="card-sentence">' + opts.sentence + '</p>' : '') +
+    (opts.factsHtml || (opts.sentence ? '<p class="card-sentence">' + opts.sentence + '</p>' : '')) +
     (opts.recommendationHtml || '') +
-    (opts.countsHtml || '') +
-    (opts.histogramHtml || '') +
-    '<button class="link-btn" onclick="toggleExpand(\'' + opts.id + '\')">' + (expanded ? '▲ Hide details' : '▼ Show details') + '</button>' +
+    (opts.metricsHtml || opts.countsHtml || '') +
+    (opts.metricsHtml ? '' : (opts.histogramHtml || '')) +
+    '<div class="card-details-toggle"><button class="link-btn" onclick="toggleExpand(\'' + opts.id + '\')">' + (expanded ? '▲ Hide details' : '▼ Show details') + '</button></div>' +
     (expanded ? '<div class="drilldown">' + opts.drilldownHtml + '</div>' : '') +
   '</div>';
 }
@@ -1407,14 +1458,21 @@ function renderDuplicateCard(anchorId) {
   const res = computeDuplicateResult(group);
   const cardId = 'dup_' + anchorId;
   const hasVip = group.anchor.vip || group.members.some(function (m) { return m.vip; });
-  const sentence = Calc.summarySentence('duplicate', res);
+  const c = res.counts;
+  const facts = [
+    'Intra-run CV <strong>' + (res.verdict === 'PASS' ? 'passed' : 'FAILED') + '</strong> — ' + c.cv20 + ' of ' + c.validPeptideCount + ' peptides above the &gt;' + Calc.THRESHOLDS.duplicateCvFailPeptideCount + '% CV threshold.',
+    c.blqMismatchCount > 0 ? c.blqMismatchCount + ' peptide(s) had a BLQ/concentration mismatch (one replicate detected, the other didn\'t) — always counted as a fail.' : ''
+  ];
+  const factsHtml = renderFactsList(facts);
   const countsHtml = renderCountsTable([
-    { label: 'Valid peptides compared', value: res.counts.validPeptideCount },
-    { label: '&gt;10% CV', value: res.counts.cv10 },
-    { label: '&gt;20% CV (fail threshold: &gt;' + Calc.THRESHOLDS.duplicateCvFailPeptideCount + ')', value: res.counts.cv20 },
-    { label: '&gt;30% CV', value: res.counts.cv30 },
-    { label: 'BLQ/concentration mismatches (one replicate detected, another didn\'t — always a fail)', value: res.counts.blqMismatchCount }
+    { label: 'Valid peptides compared', value: c.validPeptideCount },
+    { label: '&gt;10% CV', value: c.cv10 },
+    { label: '&gt;20% CV (fail threshold: &gt;' + Calc.THRESHOLDS.duplicateCvFailPeptideCount + ')', value: c.cv20 },
+    { label: '&gt;30% CV', value: c.cv30 },
+    { label: 'BLQ/concentration mismatches', value: c.blqMismatchCount }
   ]);
+  const donutHtml = renderDonut(passPercent(c), 'within threshold', res.verdict === 'PASS' ? 'var(--pass-accent)' : 'var(--fail-text)');
+  const metricsHtml = renderCardMetrics([donutHtml ? '<div class="metric-donut">' + donutHtml + '</div>' : '', countsHtml]);
   const isFlagged = function (row) { return row.excluded || row.blqMismatch || (row.intraCv != null && row.intraCv > Calc.THRESHOLDS.duplicateCvFailPercent); };
   const drilldownHtml = renderDrilldownTable(cardId, res.perPeptide, duplicateDrilldownColumns(), isFlagged);
   return renderCardShell({
@@ -1422,8 +1480,8 @@ function renderDuplicateCard(anchorId) {
     title: 'Duplicate/VIP — ' + escapeHtml(group.anchor.sampleId) + vipBadge(hasVip),
     subtitle: 'Batch: ' + escapeHtml(batchName(group.anchor.batchId)) + ' · ' + (group.members.length + 1) + ' replicate columns',
     verdict: res.verdict,
-    sentence: sentence,
-    countsHtml: countsHtml,
+    factsHtml: factsHtml,
+    metricsHtml: metricsHtml,
     drilldownHtml: drilldownHtml
   });
 }
@@ -1436,20 +1494,29 @@ function renderRerunSampleCard(anchorId) {
   const firstBatch = batchName(group.anchor.batchId);
   const rerunBatch = batchName(group.members[0].batchId);
   const overallVerdict = res.decision.recommendation === 'escalate-vendor' ? 'FAIL' : 'PASS';
-  const sentence = 'Intra-run CV ' + res.decision.intraVerdict + ' (' + res.batchResult.intraCounts.cv20 + '/' + res.batchResult.intraCounts.validPeptideCount + ' peptides &gt;20% CV' +
-      (res.batchResult.intraCounts.blqMismatchCount > 0 ? '; ' + res.batchResult.intraCounts.blqMismatchCount + ' BLQ/concentration mismatch(es)' : '') + '). ' +
-    'Inter-run CV ' + res.decision.interVerdict + ' (' + res.batchResult.interCounts.cv30 + '/' + res.batchResult.interCounts.validPeptideCount + ' peptides &gt;30% CV' +
-      (res.batchResult.interCounts.blqMismatchCount > 0 ? '; ' + res.batchResult.interCounts.blqMismatchCount + ' BLQ/concentration mismatch(es)' : '') + ').' +
-    (res.decision.directionalDrift.flagged ? ' Systematic drift flagged for this sample\'s ratio direction.' : '');
+  const intraCounts = res.batchResult.intraCounts, interCounts = res.batchResult.interCounts;
+  const facts = [
+    'Intra-run CV <strong>' + res.decision.intraVerdict + '</strong> — ' + intraCounts.cv20 + '/' + intraCounts.validPeptideCount + ' peptides &gt;20% CV' +
+      (intraCounts.blqMismatchCount > 0 ? ', ' + intraCounts.blqMismatchCount + ' BLQ/concentration mismatch(es)' : '') + '.',
+    'Inter-run CV <strong>' + res.decision.interVerdict + '</strong> — ' + interCounts.cv30 + '/' + interCounts.validPeptideCount + ' peptides &gt;30% CV' +
+      (interCounts.blqMismatchCount > 0 ? ', ' + interCounts.blqMismatchCount + ' BLQ/concentration mismatch(es)' : '') + '.',
+    res.decision.directionalDrift.flagged ? 'Systematic drift flagged for this sample\'s ratio direction.' : ''
+  ];
+  const factsHtml = renderFactsList(facts);
   const recommendationHtml = '<p class="recommendation"><strong>Recommendation:</strong> ' + escapeHtml(RECOMMENDATION_LABEL[res.decision.recommendation]) + '</p>';
   const countsHtml = renderCountsTable([
-    { label: 'Intra-run &gt;20% CV (fail &gt;' + Calc.THRESHOLDS.rerunIntraFailPeptideCount + ')', value: res.batchResult.intraCounts.cv20 + '/' + res.batchResult.intraCounts.validPeptideCount },
-    { label: 'Intra-run BLQ/concentration mismatches', value: res.batchResult.intraCounts.blqMismatchCount },
-    { label: 'Inter-run &gt;30% CV (fail &gt;' + Calc.THRESHOLDS.rerunInterFailPeptideCount + ')', value: res.batchResult.interCounts.cv30 + '/' + res.batchResult.interCounts.validPeptideCount },
-    { label: 'Inter-run BLQ/concentration mismatches (first-run vs. rerun — always a fail)', value: res.batchResult.interCounts.blqMismatchCount },
+    { label: 'Intra-run &gt;20% CV (fail &gt;' + Calc.THRESHOLDS.rerunIntraFailPeptideCount + ')', value: intraCounts.cv20 + '/' + intraCounts.validPeptideCount },
+    { label: 'Intra-run BLQ/concentration mismatches', value: intraCounts.blqMismatchCount },
+    { label: 'Inter-run &gt;30% CV (fail &gt;' + Calc.THRESHOLDS.rerunInterFailPeptideCount + ')', value: interCounts.cv30 + '/' + interCounts.validPeptideCount },
+    { label: 'Inter-run BLQ/concentration mismatches (first-run vs. rerun — always a fail)', value: interCounts.blqMismatchCount },
     { label: 'Sample ratio (mean of peptide ratios)' + infoDot('inter-run-cv-definition'), value: formatNum(res.sampleRatio, 2) }
   ]);
+  const donutsHtml = '<div class="metric-donut-group">' +
+    '<div class="metric-donut">' + renderDonut(passPercent(intraCounts), 'Intra CV', res.decision.intraVerdict === 'PASS' ? 'var(--pass-accent)' : 'var(--fail-text)') + '</div>' +
+    '<div class="metric-donut">' + renderDonut(passPercent(interCounts), 'Inter CV', res.decision.interVerdict === 'PASS' ? 'var(--pass-accent)' : 'var(--fail-text)') + '</div>' +
+  '</div>';
   const histogramHtml = renderHistogram(res.batchResult.ratioBuckets);
+  const metricsHtml = renderCardMetrics([donutsHtml, countsHtml, histogramHtml]);
   const isFlagged = function (row) {
     return row.excluded || row.intraBlqMismatch || row.interBlqMismatch ||
       (row.intraCv != null && row.intraCv > Calc.THRESHOLDS.rerunIntraFailPercent) ||
@@ -1462,10 +1529,9 @@ function renderRerunSampleCard(anchorId) {
     title: 'Rerun comparison — ' + escapeHtml(group.anchor.sampleId) + vipBadge(hasVip),
     subtitle: 'First-run batch: ' + escapeHtml(firstBatch) + ' → Rerun batch: ' + escapeHtml(rerunBatch),
     verdict: overallVerdict,
-    sentence: sentence,
+    factsHtml: factsHtml,
     recommendationHtml: recommendationHtml,
-    countsHtml: countsHtml,
-    histogramHtml: histogramHtml,
+    metricsHtml: metricsHtml,
     drilldownHtml: drilldownHtml
   });
 }
@@ -1476,13 +1542,20 @@ function renderPoolPlasmaCard(comparisonId) {
   const cardId = 'pool_' + comparisonId;
   const sideALabel = res.sideA.map(function (c) { return c.sampleId; }).join(', ') + ' (' + batchName(res.sideA[0] ? res.sideA[0].batchId : null) + ')';
   const sideBLabel = res.sideB.map(function (c) { return c.sampleId; }).join(', ') + ' (' + batchName(res.sideB[0] ? res.sideB[0].batchId : null) + ')';
-  const sentence = Calc.summarySentence('poolPlasma', res.batchResult);
+  const c = res.batchResult.counts;
+  const facts = [
+    'Intra-run CV <strong>' + (res.batchResult.verdict === 'PASS' ? 'passed' : 'FAILED') + '</strong> — ' + c.cv30 + ' of ' + c.validPeptideCount + ' peptides above the &gt;' + Calc.THRESHOLDS.poolPlasmaCvFailPeptideCount + '% CV threshold.',
+    c.blqMismatchCount > 0 ? c.blqMismatchCount + ' peptide(s) had a BLQ/concentration mismatch between sides — always counted as a fail.' : ''
+  ];
+  const factsHtml = renderFactsList(facts);
   const countsHtml = renderCountsTable([
-    { label: 'Valid peptides compared', value: res.batchResult.counts.validPeptideCount },
-    { label: '&gt;30% CV (fail threshold: &gt;' + Calc.THRESHOLDS.poolPlasmaCvFailPeptideCount + ')', value: res.batchResult.counts.cv30 },
-    { label: 'BLQ/concentration mismatches (either side — always a fail)', value: res.batchResult.counts.blqMismatchCount }
+    { label: 'Valid peptides compared', value: c.validPeptideCount },
+    { label: '&gt;30% CV (fail threshold: &gt;' + Calc.THRESHOLDS.poolPlasmaCvFailPeptideCount + ')', value: c.cv30 },
+    { label: 'BLQ/concentration mismatches', value: c.blqMismatchCount }
   ]);
+  const donutHtml = renderDonut(passPercent(c), 'within threshold', res.batchResult.verdict === 'PASS' ? 'var(--pass-accent)' : 'var(--fail-text)');
   const histogramHtml = renderHistogram(res.batchResult.ratioBuckets);
+  const metricsHtml = renderCardMetrics([donutHtml ? '<div class="metric-donut">' + donutHtml + '</div>' : '', countsHtml, histogramHtml]);
   const isFlagged = function (row) {
     return row.blqMismatch ||
       (row.rerunIntraCv != null && row.rerunIntraCv > Calc.THRESHOLDS.poolPlasmaCvFailPercent) ||
@@ -1495,9 +1568,8 @@ function renderPoolPlasmaCard(comparisonId) {
     title: 'Pool plasma — ' + escapeHtml(comparison.label),
     subtitle: 'Side A: ' + escapeHtml(sideALabel) + ' &nbsp;↔&nbsp; Side B: ' + escapeHtml(sideBLabel),
     verdict: res.batchResult.verdict,
-    sentence: sentence,
-    countsHtml: countsHtml,
-    histogramHtml: histogramHtml,
+    factsHtml: factsHtml,
+    metricsHtml: metricsHtml,
     drilldownHtml: drilldownHtml
   });
 }
@@ -1551,7 +1623,7 @@ function renderRerunRollups() {
       title: 'Rerun batch: ' + escapeHtml(batchName(batchId)),
       subtitle: group.length + ' sample(s) in this rerun batch',
       verdict: overallVerdict,
-      sentence: sentence,
+      factsHtml: renderFactsList(splitFactsFromSentence(sentence)),
       extraFlagsHtml: flagPills,
       drilldownHtml: renderSampleBreakdownTable(perSampleSummary)
     });
@@ -1586,11 +1658,13 @@ function buildSummaryTextDigest() {
       const title = card.querySelector('.card-header h3');
       const subtitle = card.querySelector('.card-subtitle');
       const badge = card.querySelector('.badge');
+      const facts = Array.prototype.slice.call(card.querySelectorAll('.card-facts li'));
       const sentence = card.querySelector('.card-sentence');
       const rec = card.querySelector('.recommendation');
       lines.push('- ' + (title ? title.textContent.trim() : '') + ' [' + (badge ? badge.textContent.trim() : '') + ']');
       if (subtitle) lines.push('  ' + subtitle.textContent.trim());
-      if (sentence) lines.push('  ' + sentence.textContent.trim());
+      if (facts.length) facts.forEach(function (li) { lines.push('  · ' + li.textContent.trim()); });
+      else if (sentence) lines.push('  ' + sentence.textContent.trim());
       if (rec) lines.push('  ' + rec.textContent.trim());
     });
     lines.push('');
