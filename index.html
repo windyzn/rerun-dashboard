@@ -162,11 +162,9 @@
   <nav class="stepper">
     <button class="nav-btn" data-nav="setup"><span class="step-num">1</span>Reference Panel</button>
     <span class="step-connector"></span>
-    <button class="nav-btn" data-nav="paste"><span class="step-num">2</span>Add Sample Columns</button>
+    <button class="nav-btn" data-nav="paste"><span class="step-num">2</span>Add &amp; Group Samples</button>
     <span class="step-connector"></span>
-    <button class="nav-btn" data-nav="runs"><span class="step-num">3</span>Runs &amp; Grouping</button>
-    <span class="step-connector"></span>
-    <button class="nav-btn" data-nav="summary"><span class="step-num">4</span>Summary &amp; Drilldown</button>
+    <button class="nav-btn" data-nav="summary"><span class="step-num">3</span>Summary &amp; Drilldown</button>
   </nav>
   <button id="assumptionsToggle" class="assumptions-toggle"></button>
 </header>
@@ -223,7 +221,7 @@
   </section>
 
   <section data-view="paste" class="view">
-    <h2>2 — Add Sample Columns</h2>
+    <h2>2 — Add &amp; Group Samples</h2>
     <div id="step2Guidance"></div>
 
     <h3 class="subhead">Batches</h3>
@@ -252,23 +250,21 @@
       <button id="cancelClassifyBtn" class="secondary" style="margin-top:10px;">Cancel</button>
     </div>
     <p id="pasteResultMsg" class="hint hidden" style="margin-top:8px;"></p>
-  </section>
 
-  <section data-view="runs" class="view">
-    <h2>3 — Runs &amp; Grouping</h2>
+    <hr style="border:none; border-top:1px solid var(--border); margin:32px 0 0;">
+    <h3 class="subhead">Runs &amp; Grouping</h3>
     <div id="step3Guidance"></div>
 
-    <h3 class="subhead">Sample Columns</h3>
+    <p class="hint">Sample Columns</p>
     <table id="sampleColumnsTable"></table>
 
-    <h3 class="subhead">Duplicate / VIP Groups (derived from links)</h3>
+    <p class="hint" style="margin-top:16px;">Duplicate / VIP Groups (derived from links)</p>
     <table id="duplicateGroupsTable"></table>
 
-    <h3 class="subhead">Rerun Groups (derived from links)</h3>
+    <p class="hint" style="margin-top:16px;">Rerun Groups (derived from links)</p>
     <table id="rerunGroupsTable"></table>
 
-    <h3 class="subhead">Pool Plasma Comparisons</h3>
-    <p class="hint">Pool plasma is never auto-linked — pick which columns go on each side of a comparison. Create one comparison per pairing; never average across batches.</p>
+    <p class="hint" style="margin-top:16px;">Pool Plasma Comparisons — never auto-linked; pick which columns go on each side of a comparison. Create one comparison per pairing; never average across batches.</p>
     <div class="row" style="align-items:flex-start;">
       <div class="side-box">
         <strong>Side A</strong>
@@ -535,8 +531,7 @@ function stepReadiness() {
 function nextIncompleteStepView() {
   const r = stepReadiness();
   if (!r.step1) return 'setup';
-  if (!r.step2) return 'paste';
-  if (!r.step3) return 'runs';
+  if (!r.step2 || !r.step3) return 'paste';
   return 'summary';
 }
 
@@ -570,8 +565,7 @@ function renderStep2Guidance() {
     goto: 'setup', gotoLabel: 'Go to Reference Panel →'
   } : r.step2 ? {
     ready: true, title: 'Sample columns added',
-    body: n + ' column(s) saved — head to Runs & Grouping to link duplicates, reruns, and pool plasma.',
-    goto: 'runs', gotoLabel: 'Continue to Runs & Grouping →'
+    body: n + ' column(s) saved — scroll down to link duplicates, reruns, and pool plasma comparisons.'
   } : {
     ready: false, title: 'Add your sample columns',
     body: 'Paste a tab-delimited block of sample values below — as many columns as you like in one go.'
@@ -582,15 +576,14 @@ function renderStep3Guidance() {
   const r = stepReadiness();
   document.getElementById('step3Guidance').innerHTML = stepGuidanceHtml(!r.step2 ? {
     ready: false, title: 'No sample columns yet',
-    body: 'Add sample columns first, then come back here to link duplicates, reruns, and pool plasma comparisons.',
-    goto: 'paste', gotoLabel: 'Go to Add Sample Columns →'
+    body: 'Add sample columns above first, then come back here to link duplicates, reruns, and pool plasma comparisons.'
   } : r.step3 ? {
     ready: true, title: 'Comparisons are grouped',
     body: 'You have linked/compared columns ready to review.',
     goto: 'summary', gotoLabel: 'View Summary →'
   } : {
     ready: false, title: 'Link your columns',
-    body: 'Rerun/Duplicate columns link to a First-run column when you save them in step 2 — or create a Pool Plasma comparison below.'
+    body: 'Rerun/Duplicate columns link to a First-run column when you save them above — or create a Pool Plasma comparison below.'
   });
 }
 
@@ -601,7 +594,7 @@ function renderStep4Guidance() {
   el.innerHTML = r.step3 ? '' : stepGuidanceHtml({
     ready: false, title: 'Nothing to review yet',
     body: 'Once you\'ve added sample columns and linked a comparison, results will show up here automatically.',
-    goto: r.step2 ? 'runs' : 'paste', gotoLabel: r.step2 ? 'Go to Runs & Grouping →' : 'Go to Add Sample Columns →'
+    goto: 'paste', gotoLabel: r.step2 ? 'Go to Runs & Grouping →' : 'Go to Add & Group Samples →'
   });
 }
 
@@ -609,9 +602,10 @@ function renderHomeChecklist() {
   const r = stepReadiness();
   const steps = [
     { n: 1, label: 'Reference Panel', view: 'setup', ready: r.step1, readyNote: state.referencePanel.rows.length + ' peptide(s) loaded', pendingNote: 'Not set up yet' },
-    { n: 2, label: 'Add Sample Columns', view: 'paste', ready: r.step2, readyNote: state.sampleColumns.length + ' column(s) added', pendingNote: 'No sample data yet' },
-    { n: 3, label: 'Runs & Grouping', view: 'runs', ready: r.step3, readyNote: 'Comparisons linked', pendingNote: 'Nothing grouped yet' },
-    { n: 4, label: 'Summary & Drilldown', view: 'summary', ready: r.step4, readyNote: 'Ready to review', pendingNote: 'Nothing to show yet' }
+    { n: 2, label: 'Add & Group Samples', view: 'paste', ready: r.step2 && r.step3,
+      readyNote: state.sampleColumns.length + ' column(s) added, comparisons linked',
+      pendingNote: !r.step2 ? 'No sample data yet' : 'Columns added — nothing grouped yet' },
+    { n: 3, label: 'Summary & Drilldown', view: 'summary', ready: r.step4, readyNote: 'Ready to review', pendingNote: 'Nothing to show yet' }
   ];
   document.getElementById('homeChecklist').innerHTML = steps.map(function (s) {
     return '<button class="home-checklist-item ' + (s.ready ? 'ready' : 'pending') + '" data-goto="' + s.view + '">' +
@@ -940,6 +934,9 @@ function renderPasteView() {
   renderBatchChips();
   updateGridMismatchWarning();
   renderStep2Guidance();
+  // Runs & Grouping lives in this same tab now (it's the direct output of the
+  // columns added just above), so keep it in sync too.
+  renderRunsView();
 }
 
 /**
@@ -1658,7 +1655,6 @@ function switchView(name) {
   if (name === 'home') renderHomeChecklist();
   else if (name === 'setup') renderReferencePanelView();
   else if (name === 'paste') renderPasteView();
-  else if (name === 'runs') renderRunsView();
   else if (name === 'summary') renderSummary();
 }
 
