@@ -751,6 +751,31 @@
     return { canonical: trimmed, prefix: null, confidence: 'low' };
   }
 
+  // A barcode prefix's leading letter + plate/run number, e.g. "P1-" or "D4A-".
+  // Unlike KNOWN_PREFIXES above (display-only canonicalization), the leading LETTER
+  // here is a meaningful category signal: a "D" prefix means "duplicate of whichever
+  // column carries the same bare ID under a different leading letter" — confirmed
+  // directly against real data, distinct from the plate/run NUMBER part (e.g. "1" in
+  // "P1-"/"D1-"), which stays unreliable for category (the same number shows up on
+  // both first-run and rerun columns for one sample, per the note on KNOWN_PREFIXES).
+  const BARCODE_PREFIX_PATTERN = /^([A-Za-z])(\d[A-Z]?)-(.+)$/;
+
+  /**
+   * Splits a barcode into its leading letter, plate/run number, and bare ID, so the
+   * UI can auto-detect a "D"-prefixed column as a Duplicate of the column with the
+   * same bare ID under a different leading letter. Returns letter:null when there's
+   * no recognized letter+number+dash prefix at all (bareId is then just the raw
+   * trimmed string, same as matchBarcode's no-prefix case).
+   * @param {string} raw
+   * @returns {{letter:string|null, run:string|null, bareId:string}}
+   */
+  function parseBarcodePrefix(raw) {
+    const trimmed = (raw == null ? '' : String(raw)).trim();
+    const match = trimmed.match(BARCODE_PREFIX_PATTERN);
+    if (!match) return { letter: null, run: null, bareId: trimmed };
+    return { letter: match[1].toUpperCase(), run: match[2].toUpperCase(), bareId: match[3] };
+  }
+
   // ---------------------------------------------------------------------
   // Export
   // ---------------------------------------------------------------------
@@ -781,7 +806,8 @@
     directionalDriftFlag: directionalDriftFlag,
     batchLevelEscalation: batchLevelEscalation,
     summarySentence: summarySentence,
-    matchBarcode: matchBarcode
+    matchBarcode: matchBarcode,
+    parseBarcodePrefix: parseBarcodePrefix
   };
 
   if (typeof module !== 'undefined' && module.exports) {

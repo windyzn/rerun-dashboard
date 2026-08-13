@@ -268,6 +268,7 @@
     <div id="classifyStep" class="hidden">
       <h3 class="subhead">Step B — classify each column</h3>
       <p class="hint">Every column needs a Sample ID, a category, and a batch. Rerun/Duplicate columns must link to the First-run column they belong to (from this paste or already saved).</p>
+      <p id="autoDetectNote" class="hint hidden" style="color:var(--pass-text);"></p>
       <div class="drilldown-scroll">
         <table class="classify-table" id="classifyTable"></table>
       </div>
@@ -401,6 +402,7 @@ const uiState = { expanded: new Set(), drilldown: {} };
 // Transient (not persisted) bulk-paste-in-progress state.
 let pendingGrid = null;           // { columnCount, rawColumns: ParsedValue[][] }
 let pendingClassifications = [];  // [{ sampleId, category, vip, batchId, linkedFirstRunColumnId }]
+let pendingAutoDetectCount = 0;   // how many pendingClassifications rows autoDetectDuplicatePrefixes() just set
 
 function uid(prefix) { return prefix + '_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
 function getColumn(id) { return state.sampleColumns.find(function (c) { return c.id === id; }); }
@@ -1112,7 +1114,49 @@ function handleParseGrid() {
     const prefillId = barcodeRow && barcodeRow[c] != null ? barcodeRow[c].trim() : '';
     pendingClassifications.push({ sampleId: prefillId, category: 'First-run', vip: false, batchId: '', linkedFirstRunColumnId: '' });
   }
+  pendingAutoDetectCount = autoDetectDuplicatePrefixes();
   renderClassifyStep();
+}
+
+/** A "D" leading letter (e.g. "D1-552H937") means Duplicate of whichever column
+ * carries the same bare ID under a different leading letter (e.g. "P1-552H937") —
+ * confirmed directly against real data. Pre-fills category + link for every
+ * D-prefixed column in this paste that has a matching counterpart (already saved,
+ * or elsewhere in the same paste); everything stays a normal editable row
+ * afterward, so a wrong guess is one click to fix before saving. Returns how many
+ * rows it set, for the on-screen note. */
+function autoDetectDuplicatePrefixes() {
+  let count = 0;
+  pendingClassifications.forEach(function (pc, i) {
+    const parsed = Calc.parseBarcodePrefix(pc.sampleId);
+    if (parsed.letter !== 'D' || !parsed.bareId) return;
+
+    const savedMatch = state.sampleColumns.find(function (col) {
+      return col.category === 'First-run' && Calc.parseBarcodePrefix(col.sampleId).bareId === parsed.bareId;
+    });
+    if (savedMatch) {
+      pc.category = 'Duplicate';
+      pc.linkedFirstRunColumnId = 'saved:' + savedMatch.id;
+      count++;
+      return;
+    }
+
+    // Any other column in this same paste whose own leading letter isn't itself
+    // "D" is a plausible first-run counterpart — its category field is still just
+    // sitting at the loop's initial default of 'First-run' at this point, which is
+    // consistent with the letter check either way, so there's no ordering hazard.
+    const pendingMatchIndex = pendingClassifications.findIndex(function (other, j) {
+      if (j === i) return false;
+      const otherParsed = Calc.parseBarcodePrefix(other.sampleId);
+      return otherParsed.letter !== 'D' && otherParsed.bareId === parsed.bareId;
+    });
+    if (pendingMatchIndex !== -1) {
+      pc.category = 'Duplicate';
+      pc.linkedFirstRunColumnId = 'pending:' + pendingMatchIndex;
+      count++;
+    }
+  });
+  return count;
 }
 
 function firstRunOptionsHtml(excludeIndex, selectedValue) {
@@ -1133,6 +1177,14 @@ function renderClassifyStep() {
   const stepEl = document.getElementById('classifyStep');
   if (!pendingGrid) { stepEl.classList.add('hidden'); return; }
   stepEl.classList.remove('hidden');
+
+  const noteEl = document.getElementById('autoDetectNote');
+  if (pendingAutoDetectCount > 0) {
+    noteEl.innerHTML = icon('check') + ' Auto-detected ' + pendingAutoDetectCount + ' "D"-prefixed column(s) as Duplicate, linked to their matching column — review before saving.';
+    noteEl.classList.remove('hidden');
+  } else {
+    noteEl.classList.add('hidden');
+  }
 
   const rowsHtml = pendingClassifications.map(function (pc, i) {
     const labelCell = pendingGrid.labelRow && pendingGrid.labelRow[i] != null ? pendingGrid.labelRow[i].trim() : '';
@@ -1208,6 +1260,7 @@ function closePreviewModal() {
 function handleCancelClassify() {
   pendingGrid = null;
   pendingClassifications = [];
+  pendingAutoDetectCount = 0;
   document.getElementById('gridPasteInput').value = '';
   renderClassifyStep();
   updateGridMismatchWarning();
@@ -1255,6 +1308,7 @@ function handleSaveClassified() {
   const savedCount = pendingClassifications.length;
   pendingGrid = null;
   pendingClassifications = [];
+  pendingAutoDetectCount = 0;
   document.getElementById('gridPasteInput').value = '';
   renderClassifyStep();
   updateGridMismatchWarning();

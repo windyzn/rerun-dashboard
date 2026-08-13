@@ -587,6 +587,28 @@ test('matchBarcode: unrecognized/ambiguous format is low confidence', function (
 });
 
 // ---------------------------------------------------------------------
+// parseBarcodePrefix — leading letter is a category signal ("D" = Duplicate),
+// distinct from matchBarcode's display-only canonicalization.
+// ---------------------------------------------------------------------
+
+test('parseBarcodePrefix: splits letter, run number, and bare ID', function () {
+  assert.deepStrictEqual(Calc.parseBarcodePrefix('P1-552H937'), { letter: 'P', run: '1', bareId: '552H937' });
+  assert.deepStrictEqual(Calc.parseBarcodePrefix('D1-552H937'), { letter: 'D', run: '1', bareId: '552H937' });
+  assert.deepStrictEqual(Calc.parseBarcodePrefix('D4A-228G789'), { letter: 'D', run: '4A', bareId: '228G789' });
+});
+
+test('parseBarcodePrefix: lowercase letter still detected, normalized to uppercase', function () {
+  const m = Calc.parseBarcodePrefix('d1-552h937');
+  assert.strictEqual(m.letter, 'D');
+  assert.strictEqual(m.bareId, '552h937');
+});
+
+test('parseBarcodePrefix: no recognized prefix -> letter/run null, bareId is the raw trimmed string', function () {
+  assert.deepStrictEqual(Calc.parseBarcodePrefix('228G789'), { letter: null, run: null, bareId: '228G789' });
+  assert.deepStrictEqual(Calc.parseBarcodePrefix('  552H937  '), { letter: null, run: null, bareId: '552H937' });
+});
+
+// ---------------------------------------------------------------------
 // Guard: Xukun confirmed (Aug 7, 2026) both CV thresholds stay fixed as-is —
 // duplicate/VIP at 20%, pool plasma at 30%, no dynamic scaling. Never "fix"
 // this inconsistency without re-confirming with her first.
