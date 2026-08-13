@@ -1490,12 +1490,12 @@ function renderDuplicateCard(anchorId) {
   const hasVip = group.anchor.vip || group.members.some(function (m) { return m.vip; });
   const c = res.counts;
   const facts = [
+    c.validPeptideCount + ' valid peptide(s) compared (BLQ/NR/error excluded).',
     'Intra-run CV <strong>' + (res.verdict === 'PASS' ? 'passed' : 'FAILED') + '</strong> — ' + c.cv20 + ' of ' + c.validPeptideCount + ' peptides above the &gt;' + Calc.THRESHOLDS.duplicateCvFailPeptideCount + '% CV threshold.',
     c.blqMismatchCount > 0 ? c.blqMismatchCount + ' peptide(s) had a BLQ/concentration mismatch.' : ''
   ];
   const factsHtml = renderFactsList(facts);
   const countsHtml = renderCountsTable([
-    { label: 'Valid peptides compared', value: c.validPeptideCount, barValue: c.validPeptideCount },
     { label: '&gt;10% CV', value: c.cv10, barValue: c.cv10 },
     { label: '&gt;20% CV (fail threshold: &gt;' + Calc.THRESHOLDS.duplicateCvFailPeptideCount + ')', value: c.cv20, barValue: c.cv20, fail: true },
     { label: '&gt;30% CV', value: c.cv30, barValue: c.cv30 },
@@ -1569,12 +1569,12 @@ function renderPoolPlasmaCard(comparisonId) {
   const sideBLabel = res.sideB.map(function (c) { return c.sampleId; }).join(', ') + ' (' + batchName(res.sideB[0] ? res.sideB[0].batchId : null) + ')';
   const c = res.batchResult.counts;
   const facts = [
+    c.validPeptideCount + ' valid peptide(s) compared (BLQ/NR/error excluded).',
     'Intra-run CV <strong>' + (res.batchResult.verdict === 'PASS' ? 'passed' : 'FAILED') + '</strong> — ' + c.cv30 + ' of ' + c.validPeptideCount + ' peptides above the &gt;' + Calc.THRESHOLDS.poolPlasmaCvFailPeptideCount + '% CV threshold.',
     c.blqMismatchCount > 0 ? c.blqMismatchCount + ' peptide(s) had a BLQ/concentration mismatch between sides — always counted as a fail.' : ''
   ];
   const factsHtml = renderFactsList(facts);
   const countsHtml = renderCountsTable([
-    { label: 'Valid peptides compared', value: c.validPeptideCount, barValue: c.validPeptideCount },
     { label: '&gt;30% CV (fail threshold: &gt;' + Calc.THRESHOLDS.poolPlasmaCvFailPeptideCount + ')', value: c.cv30, barValue: c.cv30, fail: true },
     { label: 'BLQ/concentration mismatches', value: c.blqMismatchCount, barValue: c.blqMismatchCount, fail: true }
   ]);
