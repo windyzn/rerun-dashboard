@@ -80,18 +80,26 @@
   .card-facts li:last-child{ margin-bottom:0; }
   .recommendation{ background:var(--accent-soft); border:1px solid #cddcfb; border-radius:8px; padding:10px 12px; font-size:13px; margin:12px 0; }
   .card-metrics{ display:flex; align-items:flex-start; gap:32px; flex-wrap:wrap; margin:16px 0 22px; padding:16px 0 0; border-top:1px solid var(--border); }
-  .card-metrics .counts-table{ flex:1 1 320px; max-width:440px; margin-top:0; }
-  .card-metrics .histogram{ flex:1 1 320px; margin:0; min-width:260px; }
-  .metric-bar-group{ display:flex; gap:24px; flex:0 0 auto; }
-  .metric-bar-group-title{ font-size:11px; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:0.03em; margin-bottom:8px; text-align:center; }
-  .cv-bar-chart{ display:flex; align-items:flex-end; gap:12px; flex:0 0 auto; }
-  .cv-bar-wrap{ display:flex; flex-direction:column; align-items:center; width:62px; }
-  .cv-bar-track{ height:90px; width:100%; display:flex; align-items:flex-end; }
-  .cv-bar{ width:100%; border-radius:4px 4px 0 0; min-height:2px; background:#c7d6f5; }
-  .cv-bar.cv-bar-fail{ background:var(--fail-text); }
-  .cv-bar-count{ font-size:12px; font-weight:700; margin-top:4px; color:var(--text); }
-  .cv-bar-label{ font-size:10px; color:var(--muted); margin-top:1px; text-align:center; line-height:1.25; }
+  .card-metrics .counts-table{ flex:1 1 420px; max-width:560px; margin-top:0; }
+  .card-metrics .histogram{ flex:1 1 280px; margin:0; min-width:240px; }
   .counts-table{ max-width:460px; }
+  /* Inline "data bar" per row (Excel/Sheets-style) — the bar lives in the same <tr> as
+     its label/value, so it's guaranteed to line up with that row rather than needing
+     to be kept in sync with a separate chart. */
+  .counts-bar-cell{ width:200px; }
+  .counts-bar-track{ background:#eef1f5; border-radius:4px; height:14px; overflow:hidden; }
+  .counts-bar{ height:100%; background:#c7d6f5; border-radius:4px; min-width:2px; }
+  .counts-bar.counts-bar-fail{ background:var(--fail-text); }
+  .counts-value{ text-align:right; white-space:nowrap; font-weight:600; }
+  /* Summary page side nav — jump between the 3 analysis sections without scrolling. */
+  .summary-layout{ display:flex; gap:32px; align-items:flex-start; }
+  .summary-content{ flex:1; min-width:0; }
+  .summary-side-nav{ flex:0 0 168px; position:sticky; top:74px; display:flex; flex-direction:column; gap:2px; align-self:flex-start; }
+  .summary-side-nav-title{ font-size:11px; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:0.04em; margin:0 0 6px 10px; }
+  .side-nav-link{ text-align:left; background:none; border:none; border-left:2px solid transparent; padding:7px 10px; font-size:13px; color:var(--muted); cursor:pointer; border-radius:0 6px 6px 0; font-weight:600; transition:background .15s ease, color .15s ease, border-color .15s ease; }
+  .side-nav-link:hover{ background:var(--accent-soft); color:var(--text); }
+  .side-nav-link.active{ background:var(--accent-soft); color:var(--accent); border-left-color:var(--accent); }
+  .summary-section{ margin-bottom:8px; scroll-margin-top:74px; }
   .histogram{ display:flex; align-items:flex-end; gap:6px; height:110px; margin:14px 0 28px; }
   .hist-bar-wrap{ flex:1; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; height:100%; position:relative; }
   .hist-bar{ width:100%; background:#c7d6f5; border-radius:4px 4px 0 0; min-height:2px; }
@@ -160,11 +168,12 @@
   /* Print / export --------------------------------------------------- */
   .print-only{ display:none; }
   @media print{
-    header, .assumptions-panel, nav, .step-guidance, #exportBar, .modal-overlay,
+    header, .assumptions-panel, nav, .step-guidance, #exportBar, .modal-overlay, .summary-side-nav,
     section[data-view="summary"] > h2,
     section.view:not([data-view="summary"]) { display:none !important; }
     body{ background:#fff; }
     main{ padding:0; max-width:100%; }
+    .summary-layout{ gap:0; }
     .print-only{ display:block; margin-bottom:18px; }
     .card{ box-shadow:none; border:1px solid #ccc; break-inside:avoid; }
     button.link-btn{ display:none; }
@@ -299,7 +308,7 @@
   </section>
 
   <section data-view="summary" class="view">
-    <h2>4 — Summary &amp; Drilldown</h2>
+    <h2>3 — Summary &amp; Drilldown</h2>
     <div id="step4Guidance"></div>
 
     <div class="print-only">
@@ -312,17 +321,34 @@
       <button id="copySummaryBtn" class="secondary"><span id="copySummaryIcon"></span> Copy summary as text</button>
     </div>
 
-    <h3 class="subhead">Rerun Batch Overviews</h3>
-    <div id="rerunRollups"></div>
+    <div class="summary-layout">
+      <nav class="summary-side-nav" id="summarySideNav">
+        <div class="summary-side-nav-title">Jump to</div>
+        <button type="button" class="side-nav-link" data-scroll-target="secDuplicate">Duplicate / VIP</button>
+        <button type="button" class="side-nav-link" data-scroll-target="secRerun">Rerun Comparisons</button>
+        <button type="button" class="side-nav-link" data-scroll-target="secPoolPlasma">Pool Plasma</button>
+      </nav>
 
-    <h3 class="subhead">Duplicate / VIP Analyses</h3>
-    <div id="duplicateCards"></div>
+      <div class="summary-content">
+        <div id="secDuplicate" class="summary-section">
+          <h3 class="subhead">Duplicate / VIP Analyses</h3>
+          <div id="duplicateCards"></div>
+        </div>
 
-    <h3 class="subhead">Rerun Comparisons (per sample)</h3>
-    <div id="rerunCards"></div>
+        <div id="secRerun" class="summary-section">
+          <h3 class="subhead">Rerun Comparisons</h3>
+          <p class="hint">Batch-level overview:</p>
+          <div id="rerunRollups"></div>
+          <p class="hint" style="margin-top:20px;">Per-sample detail:</p>
+          <div id="rerunCards"></div>
+        </div>
 
-    <h3 class="subhead">Pool Plasma Analyses</h3>
-    <div id="poolPlasmaCards"></div>
+        <div id="secPoolPlasma" class="summary-section">
+          <h3 class="subhead">Pool Plasma Analyses</h3>
+          <div id="poolPlasmaCards"></div>
+        </div>
+      </div>
+    </div>
   </section>
 
 </main>
@@ -430,9 +456,29 @@ function assumptionText(id) {
 function infoDot(id) { return '<span class="info-dot" title="' + escapeAttr(assumptionText(id)) + '">ⓘ</span>'; }
 function vipBadge(hasVip) { return hasVip ? '<span class="badge-vip">VIP</span>' : ''; }
 
+/** Counts table with an inline horizontal "data bar" per row (Excel/Sheets style) —
+ * pass `barValue` on a row to draw a bar scaled to the max barValue in this same
+ * table, and `fail:true` to render that bar in the fail color whenever its value is
+ * actually nonzero (a zero-count fail row stays neutral). The bar lives in the same
+ * <tr> as its label/value, so it always lines up with that row — no separate chart
+ * to keep in sync. Rows without a barValue (e.g. a ratio, not a count) still get a
+ * blank bar cell so every row's columns line up. */
 function renderCountsTable(rows) {
+  const barValues = rows.map(function (r) { return r.barValue; }).filter(function (v) { return v != null; });
+  const hasBars = barValues.length > 0;
+  const max = Math.max.apply(null, [1].concat(barValues));
   return '<table class="counts-table"><tbody>' + rows.map(function (r) {
-    return '<tr><td>' + r.label + '</td><td>' + r.value + '</td></tr>';
+    let barCellHtml = '';
+    if (hasBars) {
+      if (r.barValue != null) {
+        const pct = Math.max(r.barValue > 0 ? 2 : 0, Math.round((r.barValue / max) * 100));
+        const isFail = !!r.fail && r.barValue > 0;
+        barCellHtml = '<td class="counts-bar-cell"><div class="counts-bar-track"><div class="counts-bar' + (isFail ? ' counts-bar-fail' : '') + '" style="width:' + pct + '%"></div></div></td>';
+      } else {
+        barCellHtml = '<td class="counts-bar-cell"></td>';
+      }
+    }
+    return '<tr><td>' + r.label + '</td>' + barCellHtml + '<td class="counts-value">' + r.value + '</td></tr>';
   }).join('') + '</tbody></table>';
 }
 /** Point-form summary of a card's key facts, replacing a single dense paragraph. */
@@ -441,29 +487,7 @@ function renderFactsList(facts) {
   if (items.length === 0) return '';
   return '<ul class="card-facts">' + items.map(function (f) { return '<li>' + f + '</li>'; }).join('') + '</ul>';
 }
-/** Small vertical bar chart — counts of peptides >10/20/30% CV plus BLQ/concentration
- * mismatches, so a card's numbers are visible as a shape, not just a table of digits.
- * `failKey` marks whichever CV bar (cv20 or cv30) actually drives this card's fail
- * threshold — that bar, plus the mismatch bar (always a fail), render in the fail
- * color; the other CV bar is informational only. `title`, if given, labels the chart
- * (used when a card shows more than one, e.g. rerun's Intra CV / Inter CV pair). */
-function renderCvBarChart(counts, failKey, title) {
-  const bars = [
-    { key: 'cv10', label: '&gt;10% CV', value: (counts && counts.cv10) || 0 },
-    { key: 'cv20', label: '&gt;20% CV', value: (counts && counts.cv20) || 0 },
-    { key: 'cv30', label: '&gt;30% CV', value: (counts && counts.cv30) || 0 },
-    { key: 'blq', label: 'BLQ mismatch', value: (counts && counts.blqMismatchCount) || 0 }
-  ];
-  const max = Math.max.apply(null, [1].concat(bars.map(function (b) { return b.value; })));
-  const barsHtml = bars.map(function (b) {
-    const heightPct = Math.max(2, Math.round((b.value / max) * 100));
-    const isFail = b.value > 0 && (b.key === failKey || b.key === 'blq');
-    return '<div class="cv-bar-wrap"><div class="cv-bar-track"><div class="cv-bar' + (isFail ? ' cv-bar-fail' : '') + '" style="height:' + heightPct + '%"></div></div>' +
-      '<div class="cv-bar-count">' + b.value + '</div><div class="cv-bar-label">' + b.label + '</div></div>';
-  }).join('');
-  return (title ? '<div class="metric-bar-group-title">' + escapeHtml(title) + '</div>' : '') + '<div class="cv-bar-chart">' + barsHtml + '</div>';
-}
-/** Lays counts table / bar chart(s) / histogram side by side so cards use the full card width. */
+/** Lays counts table / histogram side by side so cards use the full card width. */
 function renderCardMetrics(parts) {
   const html = (parts || []).filter(Boolean).join('');
   return html ? '<div class="card-metrics">' + html + '</div>' : '';
@@ -1471,14 +1495,13 @@ function renderDuplicateCard(anchorId) {
   ];
   const factsHtml = renderFactsList(facts);
   const countsHtml = renderCountsTable([
-    { label: 'Valid peptides compared', value: c.validPeptideCount },
-    { label: '&gt;10% CV', value: c.cv10 },
-    { label: '&gt;20% CV (fail threshold: &gt;' + Calc.THRESHOLDS.duplicateCvFailPeptideCount + ')', value: c.cv20 },
-    { label: '&gt;30% CV', value: c.cv30 },
-    { label: 'BLQ/concentration mismatches', value: c.blqMismatchCount }
+    { label: 'Valid peptides compared', value: c.validPeptideCount, barValue: c.validPeptideCount },
+    { label: '&gt;10% CV', value: c.cv10, barValue: c.cv10 },
+    { label: '&gt;20% CV (fail threshold: &gt;' + Calc.THRESHOLDS.duplicateCvFailPeptideCount + ')', value: c.cv20, barValue: c.cv20, fail: true },
+    { label: '&gt;30% CV', value: c.cv30, barValue: c.cv30 },
+    { label: 'BLQ/concentration mismatches', value: c.blqMismatchCount, barValue: c.blqMismatchCount, fail: true }
   ]);
-  const barChartHtml = renderCvBarChart(c, 'cv20', null);
-  const metricsHtml = renderCardMetrics([countsHtml, barChartHtml]);
+  const metricsHtml = renderCardMetrics([countsHtml]);
   const isFlagged = function (row) { return row.excluded || row.blqMismatch || (row.intraCv != null && row.intraCv > Calc.THRESHOLDS.duplicateCvFailPercent); };
   const drilldownHtml = renderDrilldownTable(cardId, res.perPeptide, duplicateDrilldownColumns(), isFlagged);
   return renderCardShell({
@@ -1511,18 +1534,14 @@ function renderRerunSampleCard(anchorId) {
   const factsHtml = renderFactsList(facts);
   const recommendationHtml = '<p class="recommendation"><strong>Recommendation:</strong> ' + escapeHtml(RECOMMENDATION_LABEL[res.decision.recommendation]) + '</p>';
   const countsHtml = renderCountsTable([
-    { label: 'Intra-run &gt;20% CV (fail &gt;' + Calc.THRESHOLDS.rerunIntraFailPeptideCount + ')', value: intraCounts.cv20 + '/' + intraCounts.validPeptideCount },
-    { label: 'Intra-run BLQ/concentration mismatches', value: intraCounts.blqMismatchCount },
-    { label: 'Inter-run &gt;30% CV (fail &gt;' + Calc.THRESHOLDS.rerunInterFailPeptideCount + ')', value: interCounts.cv30 + '/' + interCounts.validPeptideCount },
-    { label: 'Inter-run BLQ/concentration mismatches (first-run vs. rerun — always a fail)', value: interCounts.blqMismatchCount },
+    { label: 'Intra-run &gt;20% CV (fail &gt;' + Calc.THRESHOLDS.rerunIntraFailPeptideCount + ')', value: intraCounts.cv20 + '/' + intraCounts.validPeptideCount, barValue: intraCounts.cv20, fail: true },
+    { label: 'Intra-run BLQ/concentration mismatches', value: intraCounts.blqMismatchCount, barValue: intraCounts.blqMismatchCount, fail: true },
+    { label: 'Inter-run &gt;30% CV (fail &gt;' + Calc.THRESHOLDS.rerunInterFailPeptideCount + ')', value: interCounts.cv30 + '/' + interCounts.validPeptideCount, barValue: interCounts.cv30, fail: true },
+    { label: 'Inter-run BLQ/concentration mismatches (first-run vs. rerun — always a fail)', value: interCounts.blqMismatchCount, barValue: interCounts.blqMismatchCount, fail: true },
     { label: 'Sample ratio (mean of peptide ratios)' + infoDot('inter-run-cv-definition'), value: formatNum(res.sampleRatio, 2) }
   ]);
-  const barChartsHtml = '<div class="metric-bar-group">' +
-    '<div>' + renderCvBarChart(intraCounts, 'cv20', 'Intra CV') + '</div>' +
-    '<div>' + renderCvBarChart(interCounts, 'cv30', 'Inter CV') + '</div>' +
-  '</div>';
   const histogramHtml = renderHistogram(res.batchResult.ratioBuckets);
-  const metricsHtml = renderCardMetrics([countsHtml, barChartsHtml, histogramHtml]);
+  const metricsHtml = renderCardMetrics([countsHtml, histogramHtml]);
   const isFlagged = function (row) {
     return row.excluded || row.intraBlqMismatch || row.interBlqMismatch ||
       (row.intraCv != null && row.intraCv > Calc.THRESHOLDS.rerunIntraFailPercent) ||
@@ -1555,13 +1574,12 @@ function renderPoolPlasmaCard(comparisonId) {
   ];
   const factsHtml = renderFactsList(facts);
   const countsHtml = renderCountsTable([
-    { label: 'Valid peptides compared', value: c.validPeptideCount },
-    { label: '&gt;30% CV (fail threshold: &gt;' + Calc.THRESHOLDS.poolPlasmaCvFailPeptideCount + ')', value: c.cv30 },
-    { label: 'BLQ/concentration mismatches', value: c.blqMismatchCount }
+    { label: 'Valid peptides compared', value: c.validPeptideCount, barValue: c.validPeptideCount },
+    { label: '&gt;30% CV (fail threshold: &gt;' + Calc.THRESHOLDS.poolPlasmaCvFailPeptideCount + ')', value: c.cv30, barValue: c.cv30, fail: true },
+    { label: 'BLQ/concentration mismatches', value: c.blqMismatchCount, barValue: c.blqMismatchCount, fail: true }
   ]);
-  const barChartHtml = renderCvBarChart(c, 'cv30', null);
   const histogramHtml = renderHistogram(res.batchResult.ratioBuckets);
-  const metricsHtml = renderCardMetrics([countsHtml, barChartHtml, histogramHtml]);
+  const metricsHtml = renderCardMetrics([countsHtml, histogramHtml]);
   const isFlagged = function (row) {
     return row.blqMismatch ||
       (row.rerunIntraCv != null && row.rerunIntraCv > Calc.THRESHOLDS.poolPlasmaCvFailPercent) ||
@@ -1649,8 +1667,8 @@ function handleExportPdf() {
  * the user chose to expand. */
 function buildSummaryTextDigest() {
   const sections = [
-    { id: 'rerunRollups', label: 'Rerun Batch Overviews' },
     { id: 'duplicateCards', label: 'Duplicate / VIP Analyses' },
+    { id: 'rerunRollups', label: 'Rerun Batch Overviews' },
     { id: 'rerunCards', label: 'Rerun Comparisons (per sample)' },
     { id: 'poolPlasmaCards', label: 'Pool Plasma Analyses' }
   ];
@@ -1779,6 +1797,53 @@ function wireStaticHandlers() {
   document.addEventListener('keydown', function (e) {
     if (e.key === 'Escape') closePreviewModal();
   });
+
+  document.getElementById('summarySideNav').addEventListener('click', function (e) {
+    const link = e.target.closest('.side-nav-link');
+    if (!link) return;
+    const target = document.getElementById(link.getAttribute('data-scroll-target'));
+    if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
+  wireSummaryScrollSpy();
+}
+
+/** Highlights whichever of the 3 summary sections is currently in view, so the side
+ * nav tracks scroll position instead of only reacting to clicks. The 3 section
+ * elements are static markup (never re-rendered), so this only needs to run once.
+ * Plain scroll position (rather than IntersectionObserver bands) on purpose — with a
+ * short page, the last section may never have enough scroll room to cross a
+ * percentage-based band, so it'd never light up even once you've scrolled as far as
+ * the page allows. Snapping to the last section once you hit the bottom of the page
+ * sidesteps that. */
+function wireSummaryScrollSpy() {
+  const links = Array.prototype.slice.call(document.querySelectorAll('.side-nav-link'));
+  const sections = ['secDuplicate', 'secRerun', 'secPoolPlasma'].map(function (id) { return document.getElementById(id); }).filter(Boolean);
+  if (!links.length || !sections.length) return;
+  const REFERENCE_LINE = 110; // px from the top of the viewport, just below the sticky header
+  function setActive(id) {
+    links.forEach(function (link) { link.classList.toggle('active', link.getAttribute('data-scroll-target') === id); });
+  }
+  function update() {
+    const maxScroll = document.documentElement.scrollHeight - window.innerHeight;
+    // Nothing to scroll, or already at the very top -> first section, regardless of
+    // the "at bottom" check below (a page shorter than the viewport is trivially
+    // "at its bottom" too, which would otherwise wrongly force the last section active).
+    if (maxScroll <= 0 || window.scrollY <= 4) {
+      setActive(sections[0].id);
+      return;
+    }
+    if (window.scrollY >= maxScroll - 4) {
+      setActive(sections[sections.length - 1].id);
+      return;
+    }
+    let active = sections[0];
+    sections.forEach(function (section) {
+      if (section.getBoundingClientRect().top <= REFERENCE_LINE) active = section;
+    });
+    setActive(active.id);
+  }
+  window.addEventListener('scroll', update, { passive: true });
+  update();
 }
 
 function init() {
