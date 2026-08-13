@@ -1462,7 +1462,7 @@ function renderDuplicateCard(anchorId) {
   const c = res.counts;
   const facts = [
     'Intra-run CV <strong>' + (res.verdict === 'PASS' ? 'passed' : 'FAILED') + '</strong> — ' + c.cv20 + ' of ' + c.validPeptideCount + ' peptides above the &gt;' + Calc.THRESHOLDS.duplicateCvFailPeptideCount + '% CV threshold.',
-    c.blqMismatchCount > 0 ? c.blqMismatchCount + ' peptide(s) had a BLQ/concentration mismatch (one replicate detected, the other didn\'t) — always counted as a fail.' : ''
+    c.blqMismatchCount > 0 ? c.blqMismatchCount + ' peptide(s) had a BLQ/concentration mismatch.' : ''
   ];
   const factsHtml = renderFactsList(facts);
   const countsHtml = renderCountsTable([
