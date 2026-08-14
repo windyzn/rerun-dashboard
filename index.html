@@ -402,7 +402,7 @@ const uiState = { expanded: new Set(), drilldown: {} };
 // Transient (not persisted) bulk-paste-in-progress state.
 let pendingGrid = null;           // { columnCount, rawColumns: ParsedValue[][] }
 let pendingClassifications = [];  // [{ sampleId, category, vip, batchId, linkedFirstRunColumnId }]
-let pendingAutoDetectCount = 0;   // how many pendingClassifications rows autoDetectDuplicatePrefixes() just set
+let pendingAutoDetectCount = 0;   // how many pendingClassifications rows autoDetectDuplicates() just set
 
 function uid(prefix) { return prefix + '_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
 function getColumn(id) { return state.sampleColumns.find(function (c) { return c.id === id; }); }
@@ -1073,7 +1073,7 @@ function updateGridMismatchWarning() {
   const parts = [];
   if (headerRowCount > 0) {
     parts.push('Detected ' + headerRowCount + ' header line(s) at the top (barcode' + (headerRowCount === 2 ? ' + label' : '') +
-      ') — row 1 will auto-fill each column\'s Sample ID' + (headerRowCount === 2 ? ', row 2 is ignored' : '') + '.');
+      ') — row 1 will auto-fill each column\'s Sample ID' + (headerRowCount === 2 ? ', row 2 is used to help auto-detect duplicates' : '') + '.');
   }
   if (dataLineCount !== expected) {
     parts.push((headerRowCount > 0 ? 'Remaining ' : 'Pasted ') + dataLineCount + ' data row(s), but the reference panel has ' + expected + ' row(s). Missing rows are treated as empty; extra rows are dropped. You can still parse.');
@@ -1114,7 +1114,7 @@ function handleParseGrid() {
     const prefillId = barcodeRow && barcodeRow[c] != null ? barcodeRow[c].trim() : '';
     pendingClassifications.push({ sampleId: prefillId, category: 'First-run', vip: false, batchId: '', linkedFirstRunColumnId: '' });
   }
-  pendingAutoDetectCount = autoDetectDuplicatePrefixes();
+  pendingAutoDetectCount = autoDetectDuplicates();
   renderClassifyStep();
 }
 
@@ -1125,34 +1125,74 @@ function handleParseGrid() {
  * or elsewhere in the same paste); everything stays a normal editable row
  * afterward, so a wrong guess is one click to fix before saving. Returns how many
  * rows it set, for the on-screen note. */
-function autoDetectDuplicatePrefixes() {
+/** First character of a label-row cell, uppercased — null if there's no label row,
+ * or the cell is blank. Used by autoDetectDuplicates()'s second signal (below). */
+function labelLeadingLetter(label) {
+  const trimmed = (label || '').trim();
+  return trimmed ? trimmed.charAt(0).toUpperCase() : null;
+}
+
+function autoDetectDuplicates() {
   let count = 0;
   pendingClassifications.forEach(function (pc, i) {
+    // Signal 1: the "D"/"P" letter lives inside the Sample ID itself (e.g.
+    // "D1-552H937" vs "P1-552H937") — match by the bare ID once that letter+run
+    // prefix is stripped off.
     const parsed = Calc.parseBarcodePrefix(pc.sampleId);
-    if (parsed.letter !== 'D' || !parsed.bareId) return;
+    if (parsed.letter === 'D' && parsed.bareId) {
+      const savedMatch = state.sampleColumns.find(function (col) {
+        return col.category === 'First-run' && Calc.parseBarcodePrefix(col.sampleId).bareId === parsed.bareId;
+      });
+      if (savedMatch) {
+        pc.category = 'Duplicate';
+        pc.linkedFirstRunColumnId = 'saved:' + savedMatch.id;
+        count++;
+        return;
+      }
+      // Any other column in this same paste whose own leading letter isn't itself
+      // "D" is a plausible first-run counterpart — its category field is still just
+      // sitting at the loop's initial default of 'First-run' at this point, which is
+      // consistent with the letter check either way, so there's no ordering hazard.
+      const pendingMatchIndex = pendingClassifications.findIndex(function (other, j) {
+        if (j === i) return false;
+        const otherParsed = Calc.parseBarcodePrefix(other.sampleId);
+        return otherParsed.letter !== 'D' && otherParsed.bareId === parsed.bareId;
+      });
+      if (pendingMatchIndex !== -1) {
+        pc.category = 'Duplicate';
+        pc.linkedFirstRunColumnId = 'pending:' + pendingMatchIndex;
+        count++;
+        return;
+      }
+    }
 
-    const savedMatch = state.sampleColumns.find(function (col) {
-      return col.category === 'First-run' && Calc.parseBarcodePrefix(col.sampleId).bareId === parsed.bareId;
+    // Signal 2: the Sample ID itself is identical across columns (no distinguishing
+    // letter there at all) — the barcode alone doesn't say which is which — and the
+    // "D" vs "P" only shows up as the leading letter of the label row instead (e.g.
+    // "D436D663 Calculated Concentration" vs "P436D663 Calculated Concentration").
+    // Only fires on an exact Sample ID match; anything else is left alone rather
+    // than guessed at.
+    if (labelLeadingLetter(pendingGrid.labelRow && pendingGrid.labelRow[i]) !== 'D') return;
+    const sampleId = (pc.sampleId || '').trim();
+    if (!sampleId) return;
+
+    const savedIdMatch = state.sampleColumns.find(function (col) {
+      return col.category === 'First-run' && col.sampleId.trim() === sampleId;
     });
-    if (savedMatch) {
+    if (savedIdMatch) {
       pc.category = 'Duplicate';
-      pc.linkedFirstRunColumnId = 'saved:' + savedMatch.id;
+      pc.linkedFirstRunColumnId = 'saved:' + savedIdMatch.id;
       count++;
       return;
     }
-
-    // Any other column in this same paste whose own leading letter isn't itself
-    // "D" is a plausible first-run counterpart — its category field is still just
-    // sitting at the loop's initial default of 'First-run' at this point, which is
-    // consistent with the letter check either way, so there's no ordering hazard.
-    const pendingMatchIndex = pendingClassifications.findIndex(function (other, j) {
+    const pendingIdMatchIndex = pendingClassifications.findIndex(function (other, j) {
       if (j === i) return false;
-      const otherParsed = Calc.parseBarcodePrefix(other.sampleId);
-      return otherParsed.letter !== 'D' && otherParsed.bareId === parsed.bareId;
+      return (other.sampleId || '').trim() === sampleId &&
+        labelLeadingLetter(pendingGrid.labelRow && pendingGrid.labelRow[j]) === 'P';
     });
-    if (pendingMatchIndex !== -1) {
+    if (pendingIdMatchIndex !== -1) {
       pc.category = 'Duplicate';
-      pc.linkedFirstRunColumnId = 'pending:' + pendingMatchIndex;
+      pc.linkedFirstRunColumnId = 'pending:' + pendingIdMatchIndex;
       count++;
     }
   });
@@ -1180,7 +1220,7 @@ function renderClassifyStep() {
 
   const noteEl = document.getElementById('autoDetectNote');
   if (pendingAutoDetectCount > 0) {
-    noteEl.innerHTML = icon('check') + ' Auto-detected ' + pendingAutoDetectCount + ' "D"-prefixed column(s) as Duplicate, linked to their matching column — review before saving.';
+    noteEl.innerHTML = icon('check') + ' Auto-detected ' + pendingAutoDetectCount + ' column(s) as Duplicate from a "D" prefix, linked to their matching column — review before saving.';
     noteEl.classList.remove('hidden');
   } else {
     noteEl.classList.add('hidden');
