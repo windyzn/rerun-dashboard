@@ -46,6 +46,15 @@
   .modal-box-body{ overflow-y:auto; font-size:12.5px; color:var(--muted); background:#f8f9fb; border-radius:6px; padding:6px 8px; margin-top:8px; }
   .modal-box-body div{ padding:1px 0; }
   .modal-close-btn{ position:absolute; top:10px; right:14px; }
+  #saveAnalysisBtn{ flex-shrink:0; }
+  .saved-analysis-save-row{ display:flex; gap:8px; margin:10px 0 14px; }
+  .saved-analysis-save-row input[type=text]{ flex:1; }
+  .saved-analyses-list{ display:flex; flex-direction:column; gap:8px; overflow-y:auto; }
+  .saved-analysis-row{ border:1px solid var(--border); border-radius:8px; padding:10px 12px; }
+  .saved-analysis-row-top{ display:flex; align-items:baseline; justify-content:space-between; gap:10px; }
+  .saved-analysis-row-name{ font-weight:700; font-size:13.5px; color:var(--text); }
+  .saved-analysis-row-meta{ font-size:11.5px; color:var(--muted); margin-top:2px; white-space:nowrap; }
+  .saved-analysis-row-actions{ display:flex; gap:14px; margin-top:6px; }
   textarea{ width:100%; font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:12.5px; padding:8px; border:1px solid var(--border); border-radius:8px; transition:border-color .15s ease, box-shadow .15s ease; }
   textarea:focus, input:focus, select:focus{ outline:none; border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-soft); }
   input[type=text]{ padding:6px 8px; border:1px solid var(--border); border-radius:6px; font-size:13px; width:100%; transition:border-color .15s ease, box-shadow .15s ease; }
@@ -191,6 +200,7 @@
     <span class="step-connector"></span>
     <button class="nav-btn" data-nav="summary"><span class="step-num">3</span>Summary &amp; Drilldown</button>
   </nav>
+  <button id="saveAnalysisBtn" class="secondary" title="Save current work as a named analysis">Save Analysis</button>
   <button id="assumptionsToggle" class="assumptions-toggle"></button>
 </header>
 
@@ -208,6 +218,19 @@
   </div>
 </div>
 
+<div id="savedAnalysesModal" class="modal-overlay hidden">
+  <div class="modal-box" style="max-width:540px;">
+    <button id="savedAnalysesModalCloseBtn" class="link-btn modal-close-btn">✕ Close</button>
+    <h3>Saved Analyses</h3>
+    <p class="hint" id="savedAnalysesModalHint"></p>
+    <div class="saved-analysis-save-row">
+      <input type="text" id="savedAnalysisNameInput" placeholder="Name this analysis…" maxlength="80">
+      <button id="saveNewAnalysisBtn" class="btn">Save current work</button>
+    </div>
+    <div id="savedAnalysesList" class="saved-analyses-list"></div>
+  </div>
+</div>
+
 <main>
 
   <section data-view="home" class="view active">
@@ -216,7 +239,7 @@
       <p class="home-subtitle">Automated pass/fail checks for rerun, duplicate, VIP, and pool-plasma biomarker samples — the same math you've been running by hand in the sheet, done in seconds.</p>
     </div>
     <div class="home-actions">
-      <button class="home-action-card" data-goto="setup">
+      <button class="home-action-card" id="startNewAnalysisCard">
         <span class="home-action-icon" id="homeStartIcon"></span>
         <span class="home-action-title">Start a New Analysis</span>
         <span class="home-action-desc">Set up your reference panel, paste sample data, group your comparisons, and review results — step by step.</span>
@@ -377,7 +400,8 @@ const LS_KEYS = {
   batches: 'qc.batches.v1',
   sampleColumns: 'qc.sampleColumns.v2',
   poolPlasmaComparisons: 'qc.poolPlasmaComparisons.v1',
-  activeBatch: 'qc.activeBatch.v1'
+  activeBatch: 'qc.activeBatch.v1',
+  analyses: 'qc.analyses.v1'
 };
 
 const REF_FIELDS = ['measureType', 'biofluid', 'measureIdentifier', 'units', 'protein', 'mycoId', 'peptideId', 'peptide', 'lloq', 'uloq'];
@@ -395,17 +419,23 @@ function loadState() {
   const batchesRaw = localStorage.getItem(LS_KEYS.batches);
   const colsRaw = localStorage.getItem(LS_KEYS.sampleColumns);
   const compRaw = localStorage.getItem(LS_KEYS.poolPlasmaComparisons);
+  const analysesRaw = localStorage.getItem(LS_KEYS.analyses);
   return {
     referencePanel: refRaw ? JSON.parse(refRaw) : { version: 2, updatedAt: null, rows: [] },
     batches: batchesRaw ? JSON.parse(batchesRaw) : [],
     sampleColumns: colsRaw ? JSON.parse(colsRaw) : [],
-    poolPlasmaComparisons: compRaw ? JSON.parse(compRaw) : []
+    poolPlasmaComparisons: compRaw ? JSON.parse(compRaw) : [],
+    // Named snapshots the user has explicitly saved via the "Save Analysis" button —
+    // separate from the live working state above, which autosaves continuously.
+    analyses: analysesRaw ? JSON.parse(analysesRaw) : []
   };
 }
 function saveReferencePanel() { localStorage.setItem(LS_KEYS.referencePanel, JSON.stringify(state.referencePanel)); }
 function saveBatches() { localStorage.setItem(LS_KEYS.batches, JSON.stringify(state.batches)); }
 function saveSampleColumns() { localStorage.setItem(LS_KEYS.sampleColumns, JSON.stringify(state.sampleColumns)); }
 function saveComparisons() { localStorage.setItem(LS_KEYS.poolPlasmaComparisons, JSON.stringify(state.poolPlasmaComparisons)); }
+function saveAnalyses() { localStorage.setItem(LS_KEYS.analyses, JSON.stringify(state.analyses)); }
+function deepClone(obj) { return JSON.parse(JSON.stringify(obj)); }
 
 let state = loadState();
 const uiState = { expanded: new Set(), drilldown: {} };
@@ -420,6 +450,10 @@ function saveActiveBatch() { localStorage.setItem(LS_KEYS.activeBatch, activeBat
 let pendingGrid = null;           // { columnCount, rawColumns: ParsedValue[][] }
 let pendingClassifications = [];  // [{ sampleId, category, vip, batchId, linkedFirstRunColumnId }]
 let pendingAutoDetectCount = 0;   // how many pendingClassifications rows autoDetectDuplicates() just set
+
+// Whether the "Saved Analyses" modal was opened to save the current work or to
+// load a previous one — same modal/list, just a different hint and top row.
+let savedAnalysesModalMode = 'save'; // 'save' | 'continue'
 
 function uid(prefix) { return prefix + '_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
 function getColumn(id) { return state.sampleColumns.find(function (c) { return c.id === id; }); }
@@ -715,6 +749,175 @@ function renderHomeChecklist() {
   }).join('');
   const continueCard = document.getElementById('continueAnalysisCard');
   if (continueCard) continueCard.classList.toggle('disabled-hint', !r.step1);
+}
+
+/** "Start a New Analysis" clears the sample side of the working state (columns,
+ * batches, comparisons) but deliberately leaves the reference panel alone — it's
+ * the reusable/stable part, and re-pasting it every time you rerun the workflow
+ * would be needless busywork. Also drops any in-progress (unsaved) paste. */
+function handleStartNewAnalysis() {
+  const hasSampleData = state.sampleColumns.length > 0 || state.batches.length > 0 || state.poolPlasmaComparisons.length > 0;
+  if (hasSampleData) {
+    const ok = confirm('Start a new analysis? This clears every sample column, batch, and comparison pasted so far. Your reference panel is kept as-is.');
+    if (!ok) return;
+  }
+  state.sampleColumns = [];
+  state.batches = [];
+  state.poolPlasmaComparisons = [];
+  saveSampleColumns();
+  saveBatches();
+  saveComparisons();
+  activeBatchId = '';
+  saveActiveBatch();
+  pendingGrid = null;
+  pendingClassifications = [];
+  pendingAutoDetectCount = 0;
+  renderClassifyStep();
+  renderPasteView();
+  renderRunsView();
+  renderSummary();
+  renderHomeChecklist();
+  switchView('setup');
+}
+
+// ---------------------------------------------------------------------
+// Saved analyses — named snapshots the user can save/overwrite/delete, and
+// load later from the "Continue Previous Analysis" picker. Unlike the live
+// working state (which autosaves continuously and has no name), these are
+// explicit, user-named checkpoints, each a full self-contained copy
+// (including its own reference panel) so loading one is reproducible even if
+// the reference panel has since been edited for other work.
+// ---------------------------------------------------------------------
+
+function currentAnalysisSnapshot() {
+  return {
+    referencePanel: deepClone(state.referencePanel),
+    batches: deepClone(state.batches),
+    sampleColumns: deepClone(state.sampleColumns),
+    poolPlasmaComparisons: deepClone(state.poolPlasmaComparisons)
+  };
+}
+
+/** Replaces the entire live working state with a saved snapshot and re-renders
+ * every view that depends on it. */
+function applyAnalysisSnapshot(snapshot) {
+  state.referencePanel = deepClone(snapshot.referencePanel);
+  state.batches = deepClone(snapshot.batches);
+  state.sampleColumns = deepClone(snapshot.sampleColumns);
+  state.poolPlasmaComparisons = deepClone(snapshot.poolPlasmaComparisons);
+  saveReferencePanel();
+  saveBatches();
+  saveSampleColumns();
+  saveComparisons();
+  activeBatchId = '';
+  saveActiveBatch();
+  pendingGrid = null;
+  pendingClassifications = [];
+  pendingAutoDetectCount = 0;
+  renderClassifyStep();
+  renderReferencePanelView();
+  renderPasteView();
+  renderRunsView();
+  renderSummary();
+  renderHomeChecklist();
+}
+
+function getSavedAnalysis(id) { return state.analyses.find(function (a) { return a.id === id; }); }
+function analysisSnapshotSummary(snapshot) {
+  return snapshot.referencePanel.rows.length + ' peptide(s), ' + snapshot.sampleColumns.length + ' sample column(s)';
+}
+
+function openSavedAnalysesModal(mode) {
+  savedAnalysesModalMode = mode;
+  document.getElementById('savedAnalysesModalHint').textContent = mode === 'continue'
+    ? 'Load a saved analysis to pick up where you left off, or continue your current unsaved work below.'
+    : 'Save your current reference panel, samples, and comparisons as a named snapshot you can come back to later.';
+  document.getElementById('savedAnalysisNameInput').value = '';
+  renderSavedAnalysesList();
+  document.getElementById('savedAnalysesModal').classList.remove('hidden');
+}
+function closeSavedAnalysesModal() {
+  document.getElementById('savedAnalysesModal').classList.add('hidden');
+}
+
+function renderSavedAnalysesList() {
+  const rows = state.analyses.slice().sort(function (a, b) { return (b.updatedAt || '').localeCompare(a.updatedAt || ''); });
+  let html = '';
+  if (savedAnalysesModalMode === 'continue') {
+    html += '<div class="saved-analysis-row">' +
+      '<div class="saved-analysis-row-top"><span class="saved-analysis-row-name">Current work (unsaved)</span></div>' +
+      '<div class="saved-analysis-row-meta">' + analysisSnapshotSummary(currentAnalysisSnapshot()) + '</div>' +
+      '<div class="saved-analysis-row-actions"><button class="link-btn" data-action="continue-current">Continue →</button></div>' +
+    '</div>';
+  }
+  html += rows.map(function (a) {
+    return '<div class="saved-analysis-row">' +
+      '<div class="saved-analysis-row-top">' +
+        '<span class="saved-analysis-row-name">' + escapeHtml(a.name) + '</span>' +
+        '<span class="saved-analysis-row-meta">Updated ' + new Date(a.updatedAt).toLocaleString() + '</span>' +
+      '</div>' +
+      '<div class="saved-analysis-row-meta">' + analysisSnapshotSummary(a.snapshot) + '</div>' +
+      '<div class="saved-analysis-row-actions">' +
+        '<button class="link-btn" data-action="load-analysis" data-id="' + a.id + '">Load</button>' +
+        '<button class="link-btn" data-action="overwrite-analysis" data-id="' + a.id + '">Overwrite with current</button>' +
+        '<button class="link-btn danger" data-action="delete-analysis" data-id="' + a.id + '">Delete</button>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+  document.getElementById('savedAnalysesList').innerHTML = html || '<p class="hint">No saved analyses yet — save your current work above.</p>';
+}
+
+function handleSaveNewAnalysis() {
+  const input = document.getElementById('savedAnalysisNameInput');
+  const name = input.value.trim();
+  if (!name) { alert('Give this analysis a name first.'); input.focus(); return; }
+  const now = new Date().toISOString();
+  state.analyses.push({ id: uid('analysis'), name: name, createdAt: now, updatedAt: now, snapshot: currentAnalysisSnapshot() });
+  saveAnalyses();
+  input.value = '';
+  renderSavedAnalysesList();
+}
+
+function handleOverwriteAnalysis(id) {
+  const a = getSavedAnalysis(id);
+  if (!a) return;
+  const ok = confirm('Overwrite "' + a.name + '" with your current work? This can\'t be undone.');
+  if (!ok) return;
+  a.snapshot = currentAnalysisSnapshot();
+  a.updatedAt = new Date().toISOString();
+  saveAnalyses();
+  renderSavedAnalysesList();
+}
+
+function handleDeleteAnalysis(id) {
+  const a = getSavedAnalysis(id);
+  if (!a) return;
+  const ok = confirm('Delete saved analysis "' + a.name + '"? This can\'t be undone.');
+  if (!ok) return;
+  state.analyses = state.analyses.filter(function (x) { return x.id !== id; });
+  saveAnalyses();
+  renderSavedAnalysesList();
+}
+
+function handleLoadAnalysis(id) {
+  const a = getSavedAnalysis(id);
+  if (!a) return;
+  const ok = confirm('Load "' + a.name + '"? This replaces your current reference panel, samples, and comparisons with this saved snapshot. Any unsaved current work will be lost unless you\'ve saved it first.');
+  if (!ok) return;
+  applyAnalysisSnapshot(a.snapshot);
+  closeSavedAnalysesModal();
+  switchView(nextIncompleteStepView());
+}
+
+function handleSavedAnalysesListClick(e) {
+  const btn = e.target.closest('[data-action]');
+  if (!btn) return;
+  const action = btn.getAttribute('data-action');
+  const id = btn.getAttribute('data-id');
+  if (action === 'load-analysis') handleLoadAnalysis(id);
+  else if (action === 'overwrite-analysis') handleOverwriteAnalysis(id);
+  else if (action === 'delete-analysis') handleDeleteAnalysis(id);
+  else if (action === 'continue-current') { closeSavedAnalysesModal(); switchView(nextIncompleteStepView()); }
 }
 
 /** A handful of icon spots are static markup (not re-rendered on state
@@ -1891,9 +2094,25 @@ function wireStaticHandlers() {
     btn.addEventListener('click', function () { switchView(btn.getAttribute('data-nav')); });
   });
   document.getElementById('homeLink').addEventListener('click', function () { switchView('home'); });
-  document.getElementById('continueAnalysisCard').addEventListener('click', function () { switchView(nextIncompleteStepView()); });
-  // Any element anywhere with data-goto="<view>" (home action cards, checklist
-  // items, step-guidance "Continue" buttons) navigates the same way a nav tab does.
+  document.getElementById('startNewAnalysisCard').addEventListener('click', handleStartNewAnalysis);
+  // "Continue" only needs the saved-analyses picker if there's actually something
+  // saved to pick from — otherwise it's just the original "resume where I left off".
+  document.getElementById('continueAnalysisCard').addEventListener('click', function () {
+    if (state.analyses.length === 0) switchView(nextIncompleteStepView());
+    else openSavedAnalysesModal('continue');
+  });
+  document.getElementById('saveAnalysisBtn').addEventListener('click', function () { openSavedAnalysesModal('save'); });
+  document.getElementById('saveNewAnalysisBtn').addEventListener('click', handleSaveNewAnalysis);
+  document.getElementById('savedAnalysisNameInput').addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') handleSaveNewAnalysis();
+  });
+  document.getElementById('savedAnalysesList').addEventListener('click', handleSavedAnalysesListClick);
+  document.getElementById('savedAnalysesModalCloseBtn').addEventListener('click', closeSavedAnalysesModal);
+  document.getElementById('savedAnalysesModal').addEventListener('click', function (e) {
+    if (e.target.id === 'savedAnalysesModal') closeSavedAnalysesModal();
+  });
+  // Any element anywhere with data-goto="<view>" (checklist items, step-guidance
+  // "Continue" buttons) navigates the same way a nav tab does.
   document.body.addEventListener('click', function (e) {
     const gotoEl = e.target.closest('[data-goto]');
     if (gotoEl) switchView(gotoEl.getAttribute('data-goto'));
