@@ -134,15 +134,16 @@
   .form-grid{ display:grid; grid-template-columns:1fr 1fr; gap:14px; max-width:700px; }
   .form-field label{ display:block; font-size:12.5px; font-weight:600; margin-bottom:4px; }
   .row{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
-  .batches-box{ border:1px solid var(--border); border-radius:10px; padding:18px 20px; background:#fff; max-width:560px; box-shadow:var(--shadow-sm); }
   .batch-picker-row{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
   .batch-picker-row label{ font-size:13.5px; font-weight:700; }
   .batch-picker-row select{ font-size:13.5px; padding:7px 10px; max-width:240px; }
-  .batch-create-row{ margin-top:16px; padding-top:16px; border-top:1px solid var(--border); }
-  .batch-create-row.first-row{ margin-top:0; padding-top:0; border-top:none; }
-  .batch-chip-list{ margin-top:16px; padding-top:16px; border-top:1px solid var(--border); display:flex; flex-wrap:wrap; gap:8px; }
+  .batch-create-row{ margin-top:16px; }
+  .batch-create-row.first-row{ margin-top:0; }
+  .batch-chip-list{ margin-top:16px; display:flex; flex-wrap:wrap; gap:8px; }
   .batch-chip{ display:inline-block; background:#eef1f5; border-radius:12px; padding:4px 10px; font-size:12.5px; }
   .batch-chip .link-btn{ font-size:12px; padding:0; margin-left:8px; }
+  .batch-assign-row{ background:var(--accent-soft); border-radius:8px; padding:10px 12px; margin:10px 0 14px; }
+  .batch-assign-row label{ font-size:12.5px; font-weight:600; }
   .classify-table td, .classify-table th{ font-size:12px; }
   .side-box{ border:1px solid var(--border); border-radius:8px; padding:10px; flex:1; min-width:220px; max-height:220px; overflow:auto; }
   .side-box label{ display:block; font-size:12.5px; margin:2px 0; }
@@ -278,8 +279,8 @@
     <h2>2 — Add &amp; Group Samples</h2>
     <div id="step2Guidance"></div>
 
-    <h3 class="subhead">Batches</h3>
-    <div class="batches-box">
+    <div class="card" style="max-width:640px;">
+      <div class="card-header"><h3>① Add Batches</h3></div>
       <div class="batch-picker-row hidden" id="batchPickerRow">
         <label for="activeBatchSelect">Adding samples to</label>
         <select id="activeBatchSelect"></select>
@@ -296,58 +297,64 @@
       <div id="batchChips" class="batch-chip-list"></div>
     </div>
 
-    <h3 class="subhead">Step A — paste the raw grid</h3>
-    <p class="hint">Paste a full tab-delimited block copied straight from the sheet — one line per peptide (same order as the reference panel), as many sample columns as you like in one go. If you copy straight from the sheet including its own header rows, the barcode row (and a label row above the data, if present) is auto-detected and used to fill in each column's Sample ID.</p>
-    <textarea id="gridPasteInput" rows="8" placeholder="P4A-228G789&#9;P1-473G835&#10;P228G789 Calculated Concentration&#9;P473G835 Calculated Concentration&#10;BLQ&lt;1.357&#9;42.0&#10;13.53&#9;205.3"></textarea>
-    <p id="gridMismatchWarning" class="warning hidden"></p>
-    <button id="parseGridBtn">Parse columns</button>
+    <div class="card">
+      <div class="card-header"><h3>② Add Samples</h3></div>
+      <p class="hint">Paste a tab-delimited block copied straight from the sheet — one line per peptide, as many columns as you like. Barcode/label header rows are auto-detected and used to fill in each column's Sample ID.</p>
+      <textarea id="gridPasteInput" rows="8" placeholder="P4A-228G789&#9;P1-473G835&#10;P228G789 Calculated Concentration&#9;P473G835 Calculated Concentration&#10;BLQ&lt;1.357&#9;42.0&#10;13.53&#9;205.3"></textarea>
+      <p id="gridMismatchWarning" class="warning hidden"></p>
+      <button id="parseGridBtn">Parse columns</button>
 
-    <div id="classifyStep" class="hidden">
-      <h3 class="subhead">Step B — classify each column</h3>
-      <p class="hint">Every column needs a Sample ID, a category, and a batch. Rerun/Duplicate columns must link to the First-run column they belong to (from this paste or already saved).</p>
-      <p id="autoDetectNote" class="hint hidden" style="color:var(--pass-text);"></p>
-      <div class="row" style="margin-bottom:6px;">
-        <label for="bulkBatchSelect" style="font-size:12.5px;">Set batch for all rows below:</label>
-        <select id="bulkBatchSelect" style="max-width:200px;"></select>
-        <button id="bulkBatchApplyBtn" class="secondary">Apply to all</button>
+      <div id="classifyStep" class="hidden">
+        <h3 class="subhead">Classify &amp; assign batches</h3>
+        <p class="hint">Each column needs a Sample ID and category; Rerun/Duplicate columns must link to their First-run column. Batches already default to the one selected above — apply a different one to everything below, or edit rows individually.</p>
+        <p id="autoDetectNote" class="hint hidden" style="color:var(--pass-text);"></p>
+        <div class="row batch-assign-row">
+          <label for="bulkBatchSelect">Apply one batch to every row:</label>
+          <select id="bulkBatchSelect" style="max-width:200px;"></select>
+          <button id="bulkBatchApplyBtn" class="secondary">Apply to all</button>
+        </div>
+        <div class="drilldown-scroll">
+          <table class="classify-table" id="classifyTable"></table>
+        </div>
+        <div class="row" style="margin-top:12px;">
+          <button id="saveClassifiedBtn">Save all columns</button>
+          <button id="cancelClassifyBtn" class="secondary">Cancel</button>
+        </div>
       </div>
-      <div class="drilldown-scroll">
-        <table class="classify-table" id="classifyTable"></table>
-      </div>
-      <button id="saveClassifiedBtn" style="margin-top:10px;">Save all columns</button>
-      <button id="cancelClassifyBtn" class="secondary" style="margin-top:10px;">Cancel</button>
+      <p id="pasteResultMsg" class="hint hidden" style="margin-top:8px;"></p>
     </div>
-    <p id="pasteResultMsg" class="hint hidden" style="margin-top:8px;"></p>
 
-    <hr style="border:none; border-top:1px solid var(--border); margin:32px 0 0;">
-    <h3 class="subhead">Runs &amp; Grouping</h3>
-    <div id="step3Guidance"></div>
+    <div class="card">
+      <div class="card-header"><h3>Runs &amp; Grouping</h3></div>
+      <div id="step3Guidance"></div>
 
-    <p class="hint">Sample Columns</p>
-    <table id="sampleColumnsTable"></table>
+      <h3 class="subhead" style="margin-top:0;">Sample columns</h3>
+      <table id="sampleColumnsTable"></table>
 
-    <p class="hint" style="margin-top:16px;">Duplicate / VIP Groups (derived from links)</p>
-    <table id="duplicateGroupsTable"></table>
+      <h3 class="subhead">Duplicate / VIP groups</h3>
+      <table id="duplicateGroupsTable"></table>
 
-    <p class="hint" style="margin-top:16px;">Rerun Groups (derived from links)</p>
-    <table id="rerunGroupsTable"></table>
+      <h3 class="subhead">Rerun groups</h3>
+      <table id="rerunGroupsTable"></table>
 
-    <p class="hint" style="margin-top:16px;">Pool Plasma Comparisons — never auto-linked; pick which columns go on each side of a comparison. Create one comparison per pairing; never average across batches.</p>
-    <div class="row" style="align-items:flex-start;">
-      <div class="side-box">
-        <strong>Side A</strong>
-        <div id="sideAChecklist"></div>
+      <h3 class="subhead">Pool plasma comparisons</h3>
+      <p class="hint">Pick columns for each side, then create a comparison — never auto-linked, and never averaged across batches.</p>
+      <div class="row" style="align-items:flex-start;">
+        <div class="side-box">
+          <strong>Side A</strong>
+          <div id="sideAChecklist"></div>
+        </div>
+        <div class="side-box">
+          <strong>Side B</strong>
+          <div id="sideBChecklist"></div>
+        </div>
       </div>
-      <div class="side-box">
-        <strong>Side B</strong>
-        <div id="sideBChecklist"></div>
+      <div class="row" style="margin-top:8px;">
+        <input type="text" id="comparisonLabelInput" placeholder="Label, e.g. July 3A vs June 1A Plate 2" style="max-width:280px;">
+        <button id="createComparisonBtn">Create comparison</button>
       </div>
+      <table id="comparisonsTable"></table>
     </div>
-    <div class="row" style="margin-top:8px;">
-      <input type="text" id="comparisonLabelInput" placeholder="Label, e.g. July 3A vs June 1A Plate 2" style="max-width:280px;">
-      <button id="createComparisonBtn">Create comparison</button>
-    </div>
-    <table id="comparisonsTable"></table>
   </section>
 
   <section data-view="summary" class="view">
