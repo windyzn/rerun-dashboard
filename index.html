@@ -134,9 +134,15 @@
   .form-grid{ display:grid; grid-template-columns:1fr 1fr; gap:14px; max-width:700px; }
   .form-field label{ display:block; font-size:12.5px; font-weight:600; margin-bottom:4px; }
   .row{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
-  .batches-box{ border:1px solid var(--border); border-radius:10px; padding:12px; background:#fff; max-width:520px; box-shadow:var(--shadow-sm); }
-  .batch-chip{ display:inline-block; background:#eef1f5; border-radius:12px; padding:3px 10px; font-size:12.5px; margin:2px 4px 2px 0; }
-  .batch-chip .link-btn{ font-size:12px; padding:0; margin-left:6px; }
+  .batches-box{ border:1px solid var(--border); border-radius:10px; padding:18px 20px; background:#fff; max-width:560px; box-shadow:var(--shadow-sm); }
+  .batch-picker-row{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+  .batch-picker-row label{ font-size:13.5px; font-weight:700; }
+  .batch-picker-row select{ font-size:13.5px; padding:7px 10px; max-width:240px; }
+  .batch-create-row{ margin-top:16px; padding-top:16px; border-top:1px solid var(--border); }
+  .batch-create-row.first-row{ margin-top:0; padding-top:0; border-top:none; }
+  .batch-chip-list{ margin-top:16px; padding-top:16px; border-top:1px solid var(--border); display:flex; flex-wrap:wrap; gap:8px; }
+  .batch-chip{ display:inline-block; background:#eef1f5; border-radius:12px; padding:4px 10px; font-size:12.5px; }
+  .batch-chip .link-btn{ font-size:12px; padding:0; margin-left:8px; }
   .classify-table td, .classify-table th{ font-size:12px; }
   .side-box{ border:1px solid var(--border); border-radius:8px; padding:10px; flex:1; min-width:220px; max-height:220px; overflow:auto; }
   .side-box label{ display:block; font-size:12.5px; margin:2px 0; }
@@ -273,18 +279,21 @@
     <div id="step2Guidance"></div>
 
     <h3 class="subhead">Batches</h3>
-    <p class="hint">Batches are created once and picked from a list afterward — no free-text batch field on every column.</p>
     <div class="batches-box">
-      <div id="batchChips"></div>
-      <div class="row" style="margin-top:8px;">
-        <input type="text" id="newBatchNameInput" placeholder="New batch name, e.g. July 2026 3A" style="max-width:260px;">
+      <div class="batch-picker-row hidden" id="batchPickerRow">
+        <label for="activeBatchSelect">Adding samples to</label>
+        <select id="activeBatchSelect"></select>
+        <button id="toggleNewBatchBtn" class="link-btn">+ New batch</button>
+      </div>
+      <p class="hint hidden" id="batchPickerHint" style="margin-top:4px;">Switch this before pasting into a different batch.</p>
+
+      <div class="row batch-create-row" id="newBatchRow">
+        <input type="text" id="newBatchNameInput" placeholder="Batch name, e.g. July 2026 3A" style="max-width:260px;">
         <button id="addBatchBtn" class="secondary">Add batch</button>
+        <button id="cancelNewBatchBtn" class="link-btn hidden">Cancel</button>
       </div>
-      <div class="row" style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border);">
-        <label for="activeBatchSelect" style="font-size:12.5px; font-weight:600;">Now adding samples to:</label>
-        <select id="activeBatchSelect" style="max-width:220px;"></select>
-      </div>
-      <p class="hint">New batches are auto-selected here. Every column you paste next defaults to this batch — switch it before your next paste when you move on to a different one.</p>
+
+      <div id="batchChips" class="batch-chip-list"></div>
     </div>
 
     <h3 class="subhead">Step A — paste the raw grid</h3>
@@ -454,6 +463,11 @@ let pendingAutoDetectCount = 0;   // how many pendingClassifications rows autoDe
 // Whether the "Saved Analyses" modal was opened to save the current work or to
 // load a previous one — same modal/list, just a different hint and top row.
 let savedAnalysesModalMode = 'save'; // 'save' | 'continue'
+
+// Whether the "+ New batch" create-batch row is expanded. Only relevant once at
+// least one batch exists (it's always expanded before that, since there's
+// nothing yet to pick from).
+let newBatchRowOpen = false;
 
 function uid(prefix) { return prefix + '_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
 function getColumn(id) { return state.sampleColumns.find(function (c) { return c.id === id; }); }
@@ -1164,16 +1178,37 @@ function handleLoadDemoData() {
 // Batches
 // ---------------------------------------------------------------------
 
+/** The "add a new batch" row is the only thing shown until a batch exists (you
+ * can't pick from an empty list), then collapses behind a "+ New batch" link
+ * once you have one — the picker above it is what you actually touch most of
+ * the time. */
 function renderBatchChips() {
-  document.getElementById('batchChips').innerHTML = state.batches.length
+  const hasBatches = state.batches.length > 0;
+  document.getElementById('batchPickerRow').classList.toggle('hidden', !hasBatches);
+  document.getElementById('batchPickerHint').classList.toggle('hidden', !hasBatches);
+  document.getElementById('newBatchRow').classList.toggle('hidden', hasBatches && !newBatchRowOpen);
+  document.getElementById('newBatchRow').classList.toggle('first-row', !hasBatches);
+  document.getElementById('cancelNewBatchBtn').classList.toggle('hidden', !hasBatches);
+  document.getElementById('newBatchNameInput').placeholder = hasBatches ? 'New batch name' : 'Batch name, e.g. July 2026 3A';
+  document.getElementById('batchChips').innerHTML = hasBatches
     ? state.batches.map(function (b) {
         return '<span class="batch-chip">' + escapeHtml(b.name) +
           ' <button data-action="rename-batch" data-id="' + b.id + '" class="link-btn">Rename</button>' +
           ' <button data-action="delete-batch" data-id="' + b.id + '" class="link-btn danger">Delete</button>' +
           '</span>';
       }).join('')
-    : '<span class="hint">No batches yet — add one below.</span>';
+    : '';
   document.getElementById('activeBatchSelect').innerHTML = batchOptionsHtml(activeBatchId);
+}
+function handleToggleNewBatchRow() {
+  newBatchRowOpen = true;
+  renderBatchChips();
+  document.getElementById('newBatchNameInput').focus();
+}
+function handleCancelNewBatch() {
+  newBatchRowOpen = false;
+  document.getElementById('newBatchNameInput').value = '';
+  renderBatchChips();
 }
 function handleAddBatch() {
   const input = document.getElementById('newBatchNameInput');
@@ -1187,6 +1222,7 @@ function handleAddBatch() {
   activeBatchId = batch.id;
   saveActiveBatch();
   input.value = '';
+  newBatchRowOpen = false; // collapse back to just the picker now that there's something to pick
   renderBatchChips();
   renderClassifyStep();
 }
@@ -2127,6 +2163,8 @@ function wireStaticHandlers() {
   document.getElementById('refPanelTable').addEventListener('click', handleRefPanelTableClick);
 
   document.getElementById('addBatchBtn').addEventListener('click', handleAddBatch);
+  document.getElementById('toggleNewBatchBtn').addEventListener('click', handleToggleNewBatchRow);
+  document.getElementById('cancelNewBatchBtn').addEventListener('click', handleCancelNewBatch);
   document.getElementById('batchChips').addEventListener('click', handleBatchChipsClick);
   document.getElementById('activeBatchSelect').addEventListener('change', handleActiveBatchChange);
   document.getElementById('bulkBatchApplyBtn').addEventListener('click', handleBulkApplyBatch);
