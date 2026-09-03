@@ -11,7 +11,7 @@
     /* Molecular You brand palette v2 — from design_handoff_rerun_qc_redesign */
     --bg:#F6FCFF; --card-bg:#ffffff; --border:#E3EEF3; --border-table:#EEF5F8; --border-form:#D7E6EC;
     --text:#18374B; --muted:#61859D; --muted-2:#9AB6C4; --seafoam:#8CCFCF;
-    --pass-bg:#F0F9F4; --pass-text:#2E7D5C; --pass-accent:#7EBC9A; --pass-solid:#1F9D6C; --fail-bg:#fdecea; --fail-text:#c62828; --fail-solid:#D64545;
+    --pass-bg:#E6F7EF; --pass-text:#1F9D6C; --pass-accent:#7EBC9A; --pass-solid:#1F9D6C; --fail-bg:#FCEAEA; --fail-text:#D64545; --fail-solid:#D64545;
     --warn-bg:#FBF1E0; --warn-text:#C98A1F; --warn-border:#E9CE93;
     --accent:#18374B; --accent-dark:#0F2536; --accent-soft:#E9F0F5;
     --shadow-sm:0 1px 2px rgba(24,55,75,0.06); --shadow-md:0 1px 2px rgba(24,55,75,0.06), 0 1px 8px rgba(24,55,75,0.04);
@@ -137,11 +137,15 @@
   .flag-nr{ background:#eceff1; color:#455a64; padding:1px 5px; border-radius:4px; font-size:11.5px; }
   .flag-error{ background:var(--fail-bg); color:var(--fail-text); padding:1px 5px; border-radius:4px; font-size:11.5px; }
   .flag-empty, .flag-na{ color:var(--muted); }
-  .tag-pill{ border-radius:999px; padding:3px 9px; font-size:11px; font-weight:700; margin-right:2px; display:inline-block; }
+  .tag-pill{ border-radius:999px; padding:3px 9px; font-size:11px; font-weight:700; margin-right:2px; display:inline-block; text-transform:none; }
   .tag-pill.cat-First-run{ background:#EAF3F6; color:#18374B; }
   .tag-pill.cat-Rerun{ background:#E8EEFC; color:#2A4D9E; }
   .tag-pill.cat-Duplicate{ background:#FBF1E0; color:#8A5A00; }
   .tag-pill.cat-Pool-plasma{ background:#F0EAFC; color:#6B3FA0; }
+  /* In the Step 2 classify grid header specifically, First-run gets a solid-navy
+     pill (it's the "anchor" category being classified against) rather than the
+     pale tint used everywhere else First-run appears. */
+  .classify-col-header .tag-pill.cat-First-run{ background:#18374B; color:#fff; }
   .info-dot{ color:var(--warn-text); cursor:help; font-size:12px; }
   .warning{ background:var(--warn-bg); border:1px solid #f0c36d; color:var(--warn-text); padding:8px 10px; border-radius:8px; font-size:13px; margin:8px 0; }
   .form-grid{ display:grid; grid-template-columns:1fr 1fr; gap:14px; max-width:700px; }
@@ -192,6 +196,8 @@
   .classify-col-header{ display:flex; flex-direction:column; gap:6px; min-width:150px; }
   .classify-col-header label{ display:flex; align-items:center; gap:6px; font-size:13px; font-weight:700; white-space:nowrap; }
   .classify-col-header select, .classify-col-header input[type=text]{ font-size:12px; padding:3px 6px; }
+  .classify-select-row{ display:flex; align-items:center; gap:6px; }
+  .classify-sampleid-input{ flex:1; min-width:0; font-weight:700; }
   .classify-col-caption{ font-size:11px; color:var(--muted-2); }
 
   /* Landing page ---------------------------------------------------- */
