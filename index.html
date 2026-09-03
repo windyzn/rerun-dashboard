@@ -11,7 +11,7 @@
     /* Molecular You brand palette v2 — from design_handoff_rerun_qc_redesign */
     --bg:#F6FCFF; --card-bg:#ffffff; --border:#E3EEF3; --border-table:#EEF5F8; --border-form:#D7E6EC;
     --text:#18374B; --muted:#61859D; --muted-2:#9AB6C4; --seafoam:#8CCFCF;
-    --pass-bg:#F0F9F4; --pass-text:#2E7D5C; --pass-accent:#7EBC9A; --fail-bg:#fdecea; --fail-text:#c62828;
+    --pass-bg:#F0F9F4; --pass-text:#2E7D5C; --pass-accent:#7EBC9A; --pass-solid:#1F9D6C; --fail-bg:#fdecea; --fail-text:#c62828; --fail-solid:#D64545;
     --warn-bg:#FBF1E0; --warn-text:#C98A1F; --warn-border:#E9CE93;
     --accent:#18374B; --accent-dark:#0F2536; --accent-soft:#E9F0F5;
     --shadow-sm:0 1px 2px rgba(24,55,75,0.06); --shadow-md:0 1px 2px rgba(24,55,75,0.06), 0 1px 8px rgba(24,55,75,0.04);
@@ -87,16 +87,18 @@
   .card-header h3{ margin:0 0 2px; font-size:15px; font-weight:700; }
   .card-subtitle{ color:var(--muted); font-size:12.5px; }
   .badge{ padding:3px 10px; border-radius:12px; font-size:12px; font-weight:700; white-space:nowrap; }
-  .badge-pass{ background:var(--pass-bg); color:var(--pass-text); }
-  .badge-fail{ background:var(--fail-bg); color:var(--fail-text); }
-  .badge-vip{ background:#f3e8fc; color:#7b2cbf; padding:2px 7px; border-radius:8px; font-size:11px; margin-left:6px; }
+  .badge-pass, .badge-fail{ display:inline-flex; align-items:center; gap:6px; padding:6px 14px 6px 10px; border-radius:999px; font-size:13px; font-weight:800; color:#fff; flex-shrink:0; }
+  .badge-pass{ background:var(--pass-solid); }
+  .badge-fail{ background:var(--fail-solid); }
+  .badge-pass .icon, .badge-fail .icon{ width:13px; height:13px; stroke-width:3; }
+  .badge-vip{ background:#F3E8FC; color:#7B2CBF; padding:2px 8px; border-radius:999px; font-size:11px; font-weight:700; margin-left:6px; }
   .flag-pills{ margin:8px 0; display:flex; gap:6px; flex-wrap:wrap; }
-  .flag-pill{ background:var(--warn-bg); color:var(--warn-text); border:1px solid #f0c36d; border-radius:6px; padding:4px 8px; font-size:12px; }
+  .flag-pill{ background:var(--warn-bg); color:#8A5A00; border-radius:6px; padding:5px 10px; font-size:12px; font-weight:700; }
   .card-sentence{ font-size:13.5px; line-height:1.55; }
   .card-facts{ margin:10px 0 4px; padding-left:20px; font-size:13.5px; line-height:1.6; }
   .card-facts li{ margin-bottom:4px; }
   .card-facts li:last-child{ margin-bottom:0; }
-  .recommendation{ background:var(--accent-soft); border:1px solid #cddcfb; border-radius:8px; padding:10px 12px; font-size:13px; margin:12px 0; }
+  .recommendation{ background:var(--accent-soft); border-radius:8px; padding:10px 12px; font-size:13px; margin:12px 0; }
   .card-metrics{ display:flex; align-items:flex-start; gap:32px; flex-wrap:wrap; margin:16px 0 22px; padding:16px 0 0; border-top:1px solid var(--border); }
   .card-metrics .counts-table{ flex:1 1 420px; max-width:560px; margin-top:0; }
   .card-metrics .histogram{ flex:1 1 280px; margin:0; min-width:240px; }
@@ -120,11 +122,13 @@
   .summary-section{ margin-bottom:8px; scroll-margin-top:74px; }
   .histogram{ display:flex; align-items:flex-end; gap:6px; height:110px; margin:14px 0 28px; }
   .hist-bar-wrap{ flex:1; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; height:100%; position:relative; }
-  .hist-bar{ width:100%; background:#c7d6f5; border-radius:4px 4px 0 0; min-height:2px; }
+  .hist-bar{ width:100%; background:#CBDEE7; border-radius:4px 4px 0 0; min-height:2px; }
   .hist-bar.in-band{ background:var(--accent); }
   .hist-count{ font-size:11px; margin-top:2px; }
   .hist-label{ font-size:10px; color:var(--muted); white-space:nowrap; position:absolute; top:100%; margin-top:14px; transform:rotate(-40deg); transform-origin:top left; }
   .card-details-toggle{ margin-top:16px; }
+  .details-toggle-btn{ background:transparent; color:var(--muted); border:none; padding:0; font-weight:700; font-size:13px; cursor:pointer; transition:color .15s ease; }
+  .details-toggle-btn:hover{ color:var(--text); text-decoration:none; }
   .drilldown{ margin-top:16px; border-top:1px solid var(--border); padding-top:16px; }
   .drilldown-controls{ display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; font-size:12.5px; }
   .drilldown-scroll{ overflow:auto; max-height:480px; }
@@ -226,7 +230,7 @@
   .print-only{ display:none; }
   @media print{
     header, .assumptions-panel, nav, .step-guidance, #exportBar, .modal-overlay, .summary-side-nav,
-    section[data-view="summary"] > h2,
+    section[data-view="summary"] > .screen-header-row,
     section.view:not([data-view="summary"]) { display:none !important; }
     body{ background:#fff; }
     main{ padding:0; max-width:100%; }
@@ -414,17 +418,21 @@
   </section>
 
   <section data-view="summary" class="view">
-    <h2>Summary &amp; Drilldown</h2>
+    <div class="screen-header-row">
+      <div>
+        <h2>Summary</h2>
+        <p id="summaryMeta" class="hint"></p>
+      </div>
+      <div class="row" id="exportBar">
+        <button id="copySummaryBtn" class="secondary"><span id="copySummaryIcon"></span> Copy summary as text</button>
+        <button id="exportPdfBtn" class="btn"><span id="exportPdfIcon"></span> Export as PDF</button>
+      </div>
+    </div>
     <div id="step4Guidance"></div>
 
     <div class="print-only">
       <h1 style="margin:0 0 4px;">Rerun Sample QC Report</h1>
       <p id="printMeta" class="hint" style="color:#555;"></p>
-    </div>
-
-    <div class="row" id="exportBar" style="margin:4px 0 20px;">
-      <button id="exportPdfBtn" class="secondary"><span id="exportPdfIcon"></span> Export as PDF</button>
-      <button id="copySummaryBtn" class="secondary"><span id="copySummaryIcon"></span> Copy summary as text</button>
     </div>
 
     <div class="summary-layout">
@@ -532,6 +540,7 @@ const ICON_PATHS = {
   clipboard: '<rect x="6" y="4" width="12" height="17" rx="1.5"/><path d="M9 4V3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1"/><path d="M9 10.5h6M9 14h6M9 17.5h4"/>',
   warning: '<path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>',
   check: '<path d="M20 6 9 17l-5-5"/>',
+  x: '<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>',
   arrowRight: '<path d="M5 12h14"/><path d="M13 6l6 6-6 6"/>',
   clipboardPaste: '<path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/>',
   plus: '<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>',
@@ -632,14 +641,14 @@ function renderCardShell(opts) {
   return '<div class="card">' +
     '<div class="card-header">' +
       '<div><h3>' + opts.title + '</h3>' + (opts.subtitle ? '<div class="card-subtitle">' + opts.subtitle + '</div>' : '') + '</div>' +
-      '<span class="badge badge-' + (opts.verdict === 'PASS' ? 'pass' : 'fail') + '">' + opts.verdict + '</span>' +
+      '<span class="badge badge-' + (opts.verdict === 'PASS' ? 'pass' : 'fail') + '">' + icon(opts.verdict === 'PASS' ? 'check' : 'x') + opts.verdict + '</span>' +
     '</div>' +
     (opts.extraFlagsHtml ? '<div class="flag-pills">' + opts.extraFlagsHtml + '</div>' : '') +
     (opts.factsHtml || (opts.sentence ? '<p class="card-sentence">' + opts.sentence + '</p>' : '')) +
     (opts.recommendationHtml || '') +
     (opts.metricsHtml || opts.countsHtml || '') +
     (opts.metricsHtml ? '' : (opts.histogramHtml || '')) +
-    '<div class="card-details-toggle"><button class="link-btn" onclick="toggleExpand(\'' + opts.id + '\')">' + (expanded ? '▲ Hide details' : '▼ Show details') + '</button></div>' +
+    '<div class="card-details-toggle"><button class="details-toggle-btn" onclick="toggleExpand(\'' + opts.id + '\')">' + (expanded ? '▲ Hide details' : '▼ Show details') + '</button></div>' +
     (expanded ? '<div class="drilldown">' + opts.drilldownHtml + '</div>' : '') +
   '</div>';
 }
@@ -1992,7 +2001,7 @@ function renderDuplicateCard(anchorId) {
   const drilldownHtml = renderDrilldownTable(cardId, res.perPeptide, duplicateDrilldownColumns(), isFlagged);
   return renderCardShell({
     id: cardId,
-    title: 'Duplicate/VIP — ' + escapeHtml(group.anchor.sampleId) + vipBadge(hasVip),
+    title: escapeHtml(group.anchor.sampleId) + vipBadge(hasVip),
     subtitle: 'Batch: ' + escapeHtml(batchName(group.anchor.batchId)) + ' · ' + (group.members.length + 1) + ' replicate columns',
     verdict: res.verdict,
     factsHtml: factsHtml,
@@ -2199,11 +2208,12 @@ function handleCopySummaryText() {
 
 function renderSummary() {
   renderStep4Guidance();
+  const metaText = 'Generated ' + new Date().toLocaleString() + ' · Batches: ' +
+    (state.batches.length ? state.batches.map(function (b) { return b.name; }).join(', ') : '—');
   const printMeta = document.getElementById('printMeta');
-  if (printMeta) {
-    printMeta.textContent = 'Generated ' + new Date().toLocaleString() + ' · Batches: ' +
-      (state.batches.length ? state.batches.map(function (b) { return b.name; }).join(', ') : '—');
-  }
+  if (printMeta) printMeta.textContent = metaText;
+  const summaryMeta = document.getElementById('summaryMeta');
+  if (summaryMeta) summaryMeta.textContent = metaText;
   renderRerunRollups();
 
   const dupGroups = derivedGroups('Duplicate');
