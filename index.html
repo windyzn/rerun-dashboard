@@ -70,9 +70,9 @@
   select{ padding:5px 6px; border:1px solid var(--border); border-radius:6px; font-size:12.5px; max-width:220px; transition:border-color .15s ease, box-shadow .15s ease; }
   .num-input{ width:80px !important; }
   button{ font-family:inherit; }
-  #parseRefPanelBtn, #parseGridBtn, #saveClassifiedBtn, #createComparisonBtn, .btn{ padding:8px 16px; border-radius:7px; border:1px solid var(--accent); background:var(--accent); color:#fff; cursor:pointer; font-size:13px; font-weight:600; box-shadow:var(--shadow-sm); transition:background .15s ease, box-shadow .15s ease, transform .1s ease; }
-  #parseRefPanelBtn:hover, #parseGridBtn:hover, #saveClassifiedBtn:hover, #createComparisonBtn:hover, .btn:hover{ background:var(--accent-dark); border-color:var(--accent-dark); }
-  #parseRefPanelBtn:active, #parseGridBtn:active, #saveClassifiedBtn:active, #createComparisonBtn:active, .btn:active{ transform:translateY(1px); }
+  #parseRefPanelBtn, #parseGridBtn, #saveClassifiedBtn, .btn{ padding:8px 16px; border-radius:7px; border:1px solid var(--accent); background:var(--accent); color:#fff; cursor:pointer; font-size:13px; font-weight:600; box-shadow:var(--shadow-sm); transition:background .15s ease, box-shadow .15s ease, transform .1s ease; }
+  #parseRefPanelBtn:hover, #parseGridBtn:hover, #saveClassifiedBtn:hover, .btn:hover{ background:var(--accent-dark); border-color:var(--accent-dark); }
+  #parseRefPanelBtn:active, #parseGridBtn:active, #saveClassifiedBtn:active, .btn:active{ transform:translateY(1px); }
   .secondary{ padding:8px 16px; border-radius:7px; border:1px solid var(--border); background:#fff; color:var(--text); cursor:pointer; font-size:13px; font-weight:600; transition:border-color .15s ease, background .15s ease; }
   .secondary:hover{ border-color:var(--accent); background:var(--accent-soft); }
   .link-btn{ background:none; border:none; color:var(--accent); cursor:pointer; font-size:13px; padding:4px 0; font-weight:600; }
@@ -133,11 +133,11 @@
   .flag-nr{ background:#eceff1; color:#455a64; padding:1px 5px; border-radius:4px; font-size:11.5px; }
   .flag-error{ background:var(--fail-bg); color:var(--fail-text); padding:1px 5px; border-radius:4px; font-size:11.5px; }
   .flag-empty, .flag-na{ color:var(--muted); }
-  .tag-pill{ background:#eef1f5; border-radius:4px; padding:1px 6px; font-size:11.5px; margin-right:2px; display:inline-block; }
-  .tag-pill.cat-First-run{ background:#eef1f5; }
-  .tag-pill.cat-Rerun{ background:#e8eefc; }
-  .tag-pill.cat-Duplicate{ background:#fef6e0; }
-  .tag-pill.cat-Pool-plasma{ background:#f3e8fc; }
+  .tag-pill{ border-radius:999px; padding:3px 9px; font-size:11px; font-weight:700; margin-right:2px; display:inline-block; }
+  .tag-pill.cat-First-run{ background:#EAF3F6; color:#18374B; }
+  .tag-pill.cat-Rerun{ background:#E8EEFC; color:#2A4D9E; }
+  .tag-pill.cat-Duplicate{ background:#FBF1E0; color:#8A5A00; }
+  .tag-pill.cat-Pool-plasma{ background:#F0EAFC; color:#6B3FA0; }
   .info-dot{ color:var(--warn-text); cursor:help; font-size:12px; }
   .warning{ background:var(--warn-bg); border:1px solid #f0c36d; color:var(--warn-text); padding:8px 10px; border-radius:8px; font-size:13px; margin:8px 0; }
   .form-grid{ display:grid; grid-template-columns:1fr 1fr; gap:14px; max-width:700px; }
@@ -151,20 +151,27 @@
   .step-block-header{ display:flex; align-items:center; gap:10px; margin-bottom:14px; }
   .step-block-header h3{ margin:0; font-size:16px; font-weight:700; letter-spacing:-0.01em; }
   .step-num-badge{ display:flex; align-items:center; justify-content:center; width:24px; height:24px; border-radius:50%; background:var(--accent); color:#fff; font-size:12.5px; font-weight:700; flex-shrink:0; }
-  .batch-picker-row{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
-  .batch-picker-row label{ font-size:13.5px; font-weight:700; }
-  .batch-picker-row select{ font-size:13.5px; padding:7px 10px; max-width:240px; }
-  .batch-create-row{ margin-top:16px; }
+  .batch-create-row{ margin-top:14px; }
   .batch-create-row.first-row{ margin-top:0; }
-  .batch-chip-list{ margin-top:16px; display:flex; flex-wrap:wrap; gap:8px; }
-  .batch-chip{ display:inline-block; background:#eef1f5; border-radius:12px; padding:4px 10px; font-size:12.5px; }
-  .batch-chip .link-btn{ font-size:12px; padding:0; margin-left:8px; }
-  .batch-assign-row{ background:var(--accent-soft); border-radius:8px; padding:10px 12px; margin:10px 0 14px; }
-  .batch-assign-row label{ font-size:12.5px; font-weight:600; }
-  .classify-table td, .classify-table th{ font-size:12px; }
-  .side-box{ border:1px solid var(--border); border-radius:8px; padding:10px; flex:1; min-width:220px; max-height:220px; overflow:auto; }
-  .side-box label{ display:block; font-size:12.5px; margin:2px 0; }
-  .step-gate{ opacity:0.5; pointer-events:none; }
+  .batch-chip-list{ display:flex; flex-wrap:wrap; gap:8px; }
+  .batch-chip{ display:inline-flex; align-items:center; gap:8px; background:#EAF3F6; border-radius:999px; padding:6px 8px 6px 14px; font-size:13px; font-weight:700; }
+  .batch-chip .link-btn{ font-size:11px; padding:2px 6px; }
+  .classify-toolbar{ justify-content:space-between; margin-bottom:10px; }
+  .classify-toolbar-bulk{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+  .classify-toolbar-bulk label{ font-size:12px; font-weight:700; color:var(--muted); }
+  .bulk-vip-check{ display:flex; align-items:center; gap:4px; }
+  .classify-grid-scroll{ border-radius:12px; border:1px solid var(--border); overflow:auto; max-height:560px; }
+  .classify-grid{ border-collapse:collapse; min-width:100%; }
+  .classify-grid th, .classify-grid td{ padding:12px; font-size:13px; border-bottom:1px solid var(--border-table); white-space:nowrap; }
+  .classify-grid thead th{ background:var(--bg); vertical-align:top; text-align:left; border-bottom:1px solid var(--border); }
+  .classify-grid td{ font-variant-numeric:tabular-nums; }
+  .classify-grid .classify-peptide-col{ position:sticky; left:0; background:inherit; font-weight:700; z-index:1; }
+  .classify-grid thead .classify-peptide-col{ background:var(--bg); text-transform:uppercase; letter-spacing:0.05em; font-size:11px; color:var(--muted); font-weight:700; }
+  .classify-grid tbody tr td.classify-peptide-col{ background:#fff; }
+  .classify-col-header{ display:flex; flex-direction:column; gap:6px; min-width:150px; }
+  .classify-col-header label{ display:flex; align-items:center; gap:6px; font-size:13px; font-weight:700; white-space:nowrap; }
+  .classify-col-header select, .classify-col-header input[type=text]{ font-size:12px; padding:3px 6px; }
+  .classify-col-caption{ font-size:11px; color:var(--muted-2); }
 
   /* Landing page ---------------------------------------------------- */
   section[data-view="home"]{ max-width:920px; margin:0 auto; padding-top:32px; }
@@ -238,15 +245,6 @@
   <ul id="assumptionsList"></ul>
 </div>
 
-<div id="previewModal" class="modal-overlay hidden">
-  <div class="modal-box">
-    <button id="previewModalCloseBtn" class="link-btn modal-close-btn">✕ Close</button>
-    <h3 id="previewModalTitle"></h3>
-    <p class="hint">Every parsed value for this column, aligned to the reference panel.</p>
-    <div id="previewModalBody" class="modal-box-body"></div>
-  </div>
-</div>
-
 <div id="savedAnalysesModal" class="modal-overlay hidden">
   <div class="modal-box" style="max-width:540px;">
     <button id="savedAnalysesModalCloseBtn" class="link-btn modal-close-btn">✕ Close</button>
@@ -299,41 +297,34 @@
     <div id="step2Guidance"></div>
 
     <div class="step-block" style="max-width:640px;">
-      <div class="step-block-header"><span class="step-num-badge">1</span><h3>Add Batches</h3></div>
-      <div class="batch-picker-row hidden" id="batchPickerRow">
-        <label for="activeBatchSelect">Adding samples to</label>
-        <select id="activeBatchSelect"></select>
-        <button id="toggleNewBatchBtn" class="link-btn">+ New batch</button>
-      </div>
-      <p class="hint hidden" id="batchPickerHint" style="margin-top:4px;">Switch this before pasting into a different batch.</p>
-
-      <div class="row batch-create-row" id="newBatchRow">
+      <div class="step-block-header"><span class="step-num-badge">1</span><h3>Batches</h3></div>
+      <div id="batchChips" class="batch-chip-list"></div>
+      <div class="row batch-create-row first-row" id="newBatchRow">
         <input type="text" id="newBatchNameInput" placeholder="Batch name, e.g. July 2026 3A" style="max-width:260px;">
         <button id="addBatchBtn" class="secondary">Add batch</button>
-        <button id="cancelNewBatchBtn" class="link-btn hidden">Cancel</button>
       </div>
-
-      <div id="batchChips" class="batch-chip-list"></div>
     </div>
 
     <div class="step-block">
-      <div class="step-block-header"><span class="step-num-badge">2</span><h3>Add Samples</h3></div>
-      <p class="hint">Paste a tab-delimited block copied straight from the sheet — one line per peptide, as many columns as you like. Barcode/label header rows are auto-detected and used to fill in each column's Sample ID.</p>
+      <div class="step-block-header"><span class="step-num-badge">2</span><h3>Paste &amp; Classify Columns</h3></div>
+      <p class="hint">Paste a tab-delimited block of values, one column per sample run — as many as you like. Barcode header rows are auto-detected into Sample ID; classify each column's category and link Rerun/Duplicate/Pool plasma columns to their partner. Batches are assigned in Section 3, below.</p>
       <textarea id="gridPasteInput" rows="8" placeholder="P4A-228G789&#9;P1-473G835&#10;P228G789 Calculated Concentration&#9;P473G835 Calculated Concentration&#10;BLQ&lt;1.357&#9;42.0&#10;13.53&#9;205.3"></textarea>
       <p id="gridMismatchWarning" class="warning hidden"></p>
       <button id="parseGridBtn">Parse columns</button>
 
       <div id="classifyStep" class="hidden">
-        <h3 class="subhead">Classify &amp; assign batches</h3>
-        <p class="hint">Each column needs a Sample ID and category; Rerun/Duplicate columns must link to their First-run column. Batches already default to the one selected above — apply a different one to everything below, or edit rows individually.</p>
         <p id="autoDetectNote" class="hint hidden" style="color:var(--pass-text);"></p>
-        <div class="row batch-assign-row">
-          <label for="bulkBatchSelect">Apply one batch to every row:</label>
-          <select id="bulkBatchSelect" style="max-width:200px;"></select>
-          <button id="bulkBatchApplyBtn" class="secondary">Apply to all</button>
+        <div class="row classify-toolbar">
+          <span class="hint" id="classifyColumnCount"></span>
+          <span class="classify-toolbar-bulk">
+            <label for="bulkCategorySelect">Bulk-classify selected:</label>
+            <select id="bulkCategorySelect"></select>
+            <label class="bulk-vip-check"><input type="checkbox" id="bulkVipCheckbox"> VIP</label>
+            <button id="bulkClassifyApplyBtn" class="secondary">Apply to selected</button>
+          </span>
         </div>
-        <div class="drilldown-scroll">
-          <table class="classify-table" id="classifyTable"></table>
+        <div class="classify-grid-scroll">
+          <table class="classify-grid" id="classifyTable"></table>
         </div>
         <div class="row" style="margin-top:12px;">
           <button id="saveClassifiedBtn">Save all columns</button>
@@ -344,35 +335,22 @@
     </div>
 
     <div class="step-block">
-      <div class="step-block-header"><h3>Runs &amp; Grouping</h3></div>
+      <div class="step-block-header"><span class="step-num-badge">3</span><h3>Sample Columns &amp; Grouping</h3></div>
       <div id="step3Guidance"></div>
 
-      <h3 class="subhead" style="margin-top:0;">Sample columns</h3>
+      <div class="row classify-toolbar" style="margin-top:8px;">
+        <span class="hint">Sample columns</span>
+        <span class="classify-toolbar-bulk">
+          <label for="bulkAssignBatchSelect">Assign batch to selected:</label>
+          <select id="bulkAssignBatchSelect"></select>
+          <button id="bulkAssignBatchApplyBtn" class="secondary">Apply to selected</button>
+        </span>
+      </div>
       <table id="sampleColumnsTable"></table>
 
-      <h3 class="subhead">Duplicate / VIP groups</h3>
-      <table id="duplicateGroupsTable"></table>
-
-      <h3 class="subhead">Rerun groups</h3>
-      <table id="rerunGroupsTable"></table>
-
       <h3 class="subhead">Pool plasma comparisons</h3>
-      <p class="hint">Pick columns for each side, then create a comparison — never auto-linked, and never averaged across batches.</p>
-      <div class="row" style="align-items:flex-start;">
-        <div class="side-box">
-          <strong>Side A</strong>
-          <div id="sideAChecklist"></div>
-        </div>
-        <div class="side-box">
-          <strong>Side B</strong>
-          <div id="sideBChecklist"></div>
-        </div>
-      </div>
-      <div class="row" style="margin-top:8px;">
-        <input type="text" id="comparisonLabelInput" placeholder="Label, e.g. July 3A vs June 1A Plate 2" style="max-width:280px;">
-        <button id="createComparisonBtn">Create comparison</button>
-      </div>
-      <table id="comparisonsTable"></table>
+      <p class="hint">Pool plasma columns are listed separately, each linked to its counterpart — mean and CV are calculated between the two linked columns. Same-batch pairs link automatically; link across batches manually below.</p>
+      <table id="poolColumnsTable"></table>
     </div>
   </section>
 
@@ -434,8 +412,6 @@ const LS_KEYS = {
   referencePanel: 'qc.referencePanel.v2',
   batches: 'qc.batches.v1',
   sampleColumns: 'qc.sampleColumns.v2',
-  poolPlasmaComparisons: 'qc.poolPlasmaComparisons.v1',
-  activeBatch: 'qc.activeBatch.v1',
   analyses: 'qc.analyses.v1'
 };
 
@@ -453,13 +429,11 @@ function loadState() {
   const refRaw = localStorage.getItem(LS_KEYS.referencePanel);
   const batchesRaw = localStorage.getItem(LS_KEYS.batches);
   const colsRaw = localStorage.getItem(LS_KEYS.sampleColumns);
-  const compRaw = localStorage.getItem(LS_KEYS.poolPlasmaComparisons);
   const analysesRaw = localStorage.getItem(LS_KEYS.analyses);
   return {
     referencePanel: refRaw ? JSON.parse(refRaw) : { version: 2, updatedAt: null, rows: [] },
     batches: batchesRaw ? JSON.parse(batchesRaw) : [],
     sampleColumns: colsRaw ? JSON.parse(colsRaw) : [],
-    poolPlasmaComparisons: compRaw ? JSON.parse(compRaw) : [],
     // Named snapshots the user has explicitly saved via the "Save Analysis" button —
     // separate from the live working state above, which autosaves continuously.
     analyses: analysesRaw ? JSON.parse(analysesRaw) : []
@@ -468,28 +442,18 @@ function loadState() {
 function saveReferencePanel() { localStorage.setItem(LS_KEYS.referencePanel, JSON.stringify(state.referencePanel)); }
 function saveBatches() { localStorage.setItem(LS_KEYS.batches, JSON.stringify(state.batches)); }
 function saveSampleColumns() { localStorage.setItem(LS_KEYS.sampleColumns, JSON.stringify(state.sampleColumns)); }
-function saveComparisons() { localStorage.setItem(LS_KEYS.poolPlasmaComparisons, JSON.stringify(state.poolPlasmaComparisons)); }
 function saveAnalyses() { localStorage.setItem(LS_KEYS.analyses, JSON.stringify(state.analyses)); }
 function deepClone(obj) { return JSON.parse(JSON.stringify(obj)); }
 
 let state = loadState();
 const uiState = { expanded: new Set(), drilldown: {} };
 
-// "Currently adding samples to" — set once per batch of pastes instead of picking a
-// batch on every single pasted column. Persisted on its own key (not part of `state`)
-// since it's a lightweight UI convenience, not real QC data.
-let activeBatchId = localStorage.getItem(LS_KEYS.activeBatch) || '';
-function saveActiveBatch() { localStorage.setItem(LS_KEYS.activeBatch, activeBatchId); }
-
 // Transient (not persisted) bulk-paste-in-progress state.
 let pendingGrid = null;           // { columnCount, rawColumns: ParsedValue[][] }
-let pendingClassifications = [];  // [{ sampleId, category, vip, batchId, linkedFirstRunColumnId }]
+let pendingClassifications = [];  // [{ sampleId, category, vip, linkedFirstRunColumnId }] — batch is assigned later, in Section 3
 let pendingAutoDetectCount = 0;   // how many pendingClassifications rows autoDetectDuplicates() just set
-
-// Whether the "+ New batch" create-batch row is expanded. Only relevant once at
-// least one batch exists (it's always expanded before that, since there's
-// nothing yet to pick from).
-let newBatchRowOpen = false;
+const pendingSelectedIndices = new Set();  // checked columns in the Section 2 classify grid, for bulk-classify
+const selectedSampleColumnIds = new Set(); // checked rows (any category) in Section 3, for bulk batch assignment
 
 function uid(prefix) { return prefix + '_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
 function getColumn(id) { return state.sampleColumns.find(function (c) { return c.id === id; }); }
@@ -688,10 +652,11 @@ function toggleAssumptionsPanel() { document.getElementById('assumptionsPanel').
 function stepReadiness() {
   const dupCount = Object.keys(derivedGroups('Duplicate')).length;
   const rerunCount = Object.keys(derivedGroups('Rerun')).length;
+  const poolCount = Object.keys(derivedGroups('Pool plasma')).length;
   return {
     step1: state.referencePanel.rows.length > 0,
     step2: state.sampleColumns.length > 0,
-    step3: dupCount > 0 || rerunCount > 0 || state.poolPlasmaComparisons.length > 0,
+    step3: dupCount > 0 || rerunCount > 0 || poolCount > 0,
     step4: state.sampleColumns.length > 0
   };
 }
@@ -774,11 +739,10 @@ function renderStep4Guidance() {
  * `state` those functions read from — good enough for a decorative indicator. */
 function snapshotStepDots(snapshot) {
   const linked = snapshot.sampleColumns.some(function (c) { return !!c.linkedFirstRunColumnId; });
-  const pooled = (snapshot.poolPlasmaComparisons || []).length > 0;
   return [
     snapshot.referencePanel.rows.length > 0,
     snapshot.sampleColumns.length > 0,
-    linked || pooled
+    linked
   ];
 }
 
@@ -823,22 +787,20 @@ function handleHomeSavedListClick(e) {
  * the reusable/stable part, and re-pasting it every time you rerun the workflow
  * would be needless busywork. Also drops any in-progress (unsaved) paste. */
 function handleStartNewAnalysis() {
-  const hasSampleData = state.sampleColumns.length > 0 || state.batches.length > 0 || state.poolPlasmaComparisons.length > 0;
+  const hasSampleData = state.sampleColumns.length > 0 || state.batches.length > 0;
   if (hasSampleData) {
     const ok = confirm('Start a new analysis? This clears every sample column, batch, and comparison pasted so far. Your reference panel is kept as-is.');
     if (!ok) return;
   }
   state.sampleColumns = [];
   state.batches = [];
-  state.poolPlasmaComparisons = [];
   saveSampleColumns();
   saveBatches();
-  saveComparisons();
-  activeBatchId = '';
-  saveActiveBatch();
   pendingGrid = null;
   pendingClassifications = [];
   pendingAutoDetectCount = 0;
+  pendingSelectedIndices.clear();
+  selectedSampleColumnIds.clear();
   renderClassifyStep();
   renderPasteView();
   renderRunsView();
@@ -860,8 +822,7 @@ function currentAnalysisSnapshot() {
   return {
     referencePanel: deepClone(state.referencePanel),
     batches: deepClone(state.batches),
-    sampleColumns: deepClone(state.sampleColumns),
-    poolPlasmaComparisons: deepClone(state.poolPlasmaComparisons)
+    sampleColumns: deepClone(state.sampleColumns)
   };
 }
 
@@ -871,16 +832,14 @@ function applyAnalysisSnapshot(snapshot) {
   state.referencePanel = deepClone(snapshot.referencePanel);
   state.batches = deepClone(snapshot.batches);
   state.sampleColumns = deepClone(snapshot.sampleColumns);
-  state.poolPlasmaComparisons = deepClone(snapshot.poolPlasmaComparisons);
   saveReferencePanel();
   saveBatches();
   saveSampleColumns();
-  saveComparisons();
-  activeBatchId = '';
-  saveActiveBatch();
   pendingGrid = null;
   pendingClassifications = [];
   pendingAutoDetectCount = 0;
+  pendingSelectedIndices.clear();
+  selectedSampleColumnIds.clear();
   renderClassifyStep();
   renderReferencePanelView();
   renderPasteView();
@@ -1190,22 +1149,18 @@ function handleLoadDemoData() {
   // All 4 pool-plasma columns share sampleSeed=4 — they're the same physical
   // control lot (BRH1447353) measured across batches, so they should land
   // close together (small noise), not drift across the assay's full range.
-  const poolJuneA = { id: uid('col'), sampleId: 'POOL-R03', category: 'Pool plasma', vip: false, batchId: juneBatch.id, linkedFirstRunColumnId: null, pastedAt: new Date().toISOString(), values: buildDemoValues(4, 1) };
-  const poolJuneB = { id: uid('col'), sampleId: 'POOL-R04', category: 'Pool plasma', vip: false, batchId: juneBatch.id, linkedFirstRunColumnId: null, pastedAt: new Date().toISOString(), values: buildDemoValues(4, 2) };
-  const poolJulyA = { id: uid('col'), sampleId: 'POOL-R01', category: 'Pool plasma', vip: false, batchId: julyBatch.id, linkedFirstRunColumnId: null, pastedAt: new Date().toISOString(), values: buildDemoValues(4, 3) };
-  const poolJulyB = { id: uid('col'), sampleId: 'POOL-R02', category: 'Pool plasma', vip: false, batchId: julyBatch.id, linkedFirstRunColumnId: null, pastedAt: new Date().toISOString(), values: buildDemoValues(4, 4) };
+  // Each batch's pair (R01/R02, R03/R04) is linked directly — same-batch pool
+  // pairs like this are what autoLinkPoolPlasma() sets up automatically for
+  // real pastes; the demo just hardcodes the end result.
+  const poolJulyA = { id: uid('col'), sampleId: "Pooled Human Plasma BRH1447353_R01 Calc'd Conc.", category: 'Pool plasma', vip: false, batchId: julyBatch.id, linkedFirstRunColumnId: null, pastedAt: new Date().toISOString(), values: buildDemoValues(4, 3) };
+  const poolJulyB = { id: uid('col'), sampleId: "Pooled Human Plasma BRH1447353_R02 Calc'd Conc.", category: 'Pool plasma', vip: false, batchId: julyBatch.id, linkedFirstRunColumnId: poolJulyA.id, pastedAt: new Date().toISOString(), values: buildDemoValues(4, 4) };
+  const poolJuneA = { id: uid('col'), sampleId: "Pooled Human Plasma BRH1447353_R03 Calc'd Conc.", category: 'Pool plasma', vip: false, batchId: juneBatch.id, linkedFirstRunColumnId: null, pastedAt: new Date().toISOString(), values: buildDemoValues(4, 1) };
+  const poolJuneB = { id: uid('col'), sampleId: "Pooled Human Plasma BRH1447353_R04 Calc'd Conc.", category: 'Pool plasma', vip: false, batchId: juneBatch.id, linkedFirstRunColumnId: poolJuneA.id, pastedAt: new Date().toISOString(), values: buildDemoValues(4, 2) };
 
   state.sampleColumns = state.sampleColumns.concat([
-    firstRun228, dup228, firstRun473, rerun473a, rerun473b, firstRunVip, dupVip, poolJuneA, poolJuneB, poolJulyA, poolJulyB
+    firstRun228, dup228, firstRun473, rerun473a, rerun473b, firstRunVip, dupVip, poolJulyA, poolJulyB, poolJuneA, poolJuneB
   ]);
   saveSampleColumns();
-
-  state.poolPlasmaComparisons.push({
-    id: uid('cmp'), label: julyBatch.name + ' pool plasma vs ' + juneBatch.name + ' pool plasma',
-    sideAColumnIds: [poolJulyA.id, poolJulyB.id], sideBColumnIds: [poolJuneA.id, poolJuneB.id],
-    createdAt: new Date().toISOString()
-  });
-  saveComparisons();
 
   renderReferencePanelView();
   renderPasteView();
@@ -1218,57 +1173,26 @@ function handleLoadDemoData() {
 // Batches
 // ---------------------------------------------------------------------
 
-/** The "add a new batch" row is the only thing shown until a batch exists (you
- * can't pick from an empty list), then collapses behind a "+ New batch" link
- * once you have one — the picker above it is what you actually touch most of
- * the time. */
+/** Batches are created once here and picked from a list everywhere else (the
+ * classify grid's category pills, Section 3's batch-assign dropdown) — no
+ * free-text batch field on individual columns. */
 function renderBatchChips() {
-  const hasBatches = state.batches.length > 0;
-  document.getElementById('batchPickerRow').classList.toggle('hidden', !hasBatches);
-  document.getElementById('batchPickerHint').classList.toggle('hidden', !hasBatches);
-  document.getElementById('newBatchRow').classList.toggle('hidden', hasBatches && !newBatchRowOpen);
-  document.getElementById('newBatchRow').classList.toggle('first-row', !hasBatches);
-  document.getElementById('cancelNewBatchBtn').classList.toggle('hidden', !hasBatches);
-  document.getElementById('newBatchNameInput').placeholder = hasBatches ? 'New batch name' : 'Batch name, e.g. July 2026 3A';
-  document.getElementById('batchChips').innerHTML = hasBatches
-    ? state.batches.map(function (b) {
-        return '<span class="batch-chip">' + escapeHtml(b.name) +
-          ' <button data-action="rename-batch" data-id="' + b.id + '" class="link-btn">Rename</button>' +
-          ' <button data-action="delete-batch" data-id="' + b.id + '" class="link-btn danger">Delete</button>' +
-          '</span>';
-      }).join('')
-    : '';
-  document.getElementById('activeBatchSelect').innerHTML = batchOptionsHtml(activeBatchId);
-}
-function handleToggleNewBatchRow() {
-  newBatchRowOpen = true;
-  renderBatchChips();
-  document.getElementById('newBatchNameInput').focus();
-}
-function handleCancelNewBatch() {
-  newBatchRowOpen = false;
-  document.getElementById('newBatchNameInput').value = '';
-  renderBatchChips();
+  document.getElementById('batchChips').innerHTML = state.batches.map(function (b) {
+    return '<span class="batch-chip">' + escapeHtml(b.name) +
+      '<button data-action="rename-batch" data-id="' + b.id + '" class="link-btn">Rename</button>' +
+      '<button data-action="delete-batch" data-id="' + b.id + '" class="link-btn danger">Delete</button>' +
+      '</span>';
+  }).join('');
 }
 function handleAddBatch() {
   const input = document.getElementById('newBatchNameInput');
   const name = input.value.trim();
   if (!name) { alert('Batch name is required.'); return; }
-  const batch = { id: uid('batch'), name: name, createdAt: new Date().toISOString() };
-  state.batches.push(batch);
+  state.batches.push({ id: uid('batch'), name: name, createdAt: new Date().toISOString() });
   saveBatches();
-  // Auto-select the batch you just created as "now adding samples to" — this is the
-  // whole point: create a batch, then everything you paste next defaults into it.
-  activeBatchId = batch.id;
-  saveActiveBatch();
   input.value = '';
-  newBatchRowOpen = false; // collapse back to just the picker now that there's something to pick
   renderBatchChips();
-  renderClassifyStep();
-}
-function handleActiveBatchChange(e) {
-  activeBatchId = e.target.value;
-  saveActiveBatch();
+  renderRunsView();
 }
 function handleBatchChipsClick(e) {
   const renameBtn = e.target.closest('button[data-action="rename-batch"]');
@@ -1291,20 +1215,17 @@ function handleDeleteBatch(id) {
   const b = getBatch(id);
   if (!b) return;
   const usedByCount = state.sampleColumns.filter(function (c) { return c.batchId === id; }).length;
-  const usedByPending = pendingClassifications.filter(function (pc) { return pc.batchId === id; }).length;
   let msg = 'Delete batch "' + b.name + '"?';
   if (usedByCount > 0) msg += ' It is used by ' + usedByCount + ' saved sample column(s) — they will show as "(no batch)" until reassigned.';
-  if (usedByPending > 0) msg += ' It is also selected on ' + usedByPending + ' unsaved pasted column(s) in the classify table — that selection will be cleared.';
   if (!confirm(msg)) return;
   state.batches = state.batches.filter(function (x) { return x.id !== id; });
   saveBatches();
-  pendingClassifications.forEach(function (pc) { if (pc.batchId === id) pc.batchId = ''; });
-  if (activeBatchId === id) { activeBatchId = ''; saveActiveBatch(); }
+  state.sampleColumns.forEach(function (c) { if (c.batchId === id) c.batchId = ''; });
+  saveSampleColumns();
   refreshAllBatchDependentViews();
 }
 function refreshAllBatchDependentViews() {
   renderBatchChips();
-  renderClassifyStep();
   renderRunsView();
   renderSummary();
 }
@@ -1312,12 +1233,6 @@ function batchOptionsHtml(selectedId) {
   return '<option value="">— choose —</option>' + state.batches.map(function (b) {
     return '<option value="' + b.id + '"' + (b.id === selectedId ? ' selected' : '') + '>' + escapeHtml(b.name) + '</option>';
   }).join('');
-}
-function handleBulkApplyBatch() {
-  const batchId = document.getElementById('bulkBatchSelect').value;
-  if (!batchId) { alert('Choose a batch first.'); return; }
-  pendingClassifications.forEach(function (pc) { pc.batchId = batchId; });
-  renderClassifyStep();
 }
 
 // ---------------------------------------------------------------------
@@ -1423,9 +1338,10 @@ function handleParseGrid() {
 
   pendingGrid = { columnCount: columnCount, rawColumns: rawColumns, labelRow: labelRow };
   pendingClassifications = [];
+  pendingSelectedIndices.clear();
   for (let c = 0; c < columnCount; c++) {
     const prefillId = barcodeRow && barcodeRow[c] != null ? barcodeRow[c].trim() : '';
-    pendingClassifications.push({ sampleId: prefillId, category: 'First-run', vip: false, batchId: activeBatchId, linkedFirstRunColumnId: '' });
+    pendingClassifications.push({ sampleId: prefillId, category: 'First-run', vip: false, linkedFirstRunColumnId: '' });
   }
   pendingAutoDetectCount = autoDetectDuplicates();
   renderClassifyStep();
@@ -1526,12 +1442,24 @@ function firstRunOptionsHtml(excludeIndex, selectedValue) {
   return options.join('');
 }
 
+/** The classify grid is transposed from the raw paste — peptides run down the
+ * sticky-left column, and each pasted sample column becomes an actual table
+ * column, so it reads like the spreadsheet it came from. Category and VIP are
+ * set only via the bulk toolbar (select columns, apply) rather than a
+ * per-column control — Sample ID (auto-filled from the barcode row, but often
+ * wrong/missing) and the Rerun/Duplicate link are the two things that
+ * routinely need a one-off fix, so those stay directly editable per column. */
 function renderClassifyStep() {
   const stepEl = document.getElementById('classifyStep');
   if (!pendingGrid) { stepEl.classList.add('hidden'); return; }
   stepEl.classList.remove('hidden');
 
-  document.getElementById('bulkBatchSelect').innerHTML = batchOptionsHtml(activeBatchId);
+  document.getElementById('classifyColumnCount').textContent =
+    pendingGrid.columnCount + ' column(s) pasted' + (pendingGrid.columnCount > 4 ? ' · scroll to review all' : '');
+  document.getElementById('bulkCategorySelect').innerHTML =
+    '<option value="">Category…</option>' + Calc.CATEGORY_VOCABULARY.map(function (cat) {
+      return '<option value="' + cat + '">' + cat + '</option>';
+    }).join('');
 
   const noteEl = document.getElementById('autoDetectNote');
   if (pendingAutoDetectCount > 0) {
@@ -1541,81 +1469,82 @@ function renderClassifyStep() {
     noteEl.classList.add('hidden');
   }
 
-  const rowsHtml = pendingClassifications.map(function (pc, i) {
-    const labelCell = pendingGrid.labelRow && pendingGrid.labelRow[i] != null ? pendingGrid.labelRow[i].trim() : '';
-    const previewCell = '<span class="hint">' + (labelCell ? escapeHtml(labelCell) : '(no label row detected)') + '</span>' +
-      '<br><button data-action="open-preview" data-pi="' + i + '" class="link-btn">Preview data…</button>';
+  const headerCellsHtml = pendingClassifications.map(function (pc, i) {
     const needsLink = pc.category === 'Rerun' || pc.category === 'Duplicate';
-    return '<tr data-pending-index="' + i + '">' +
-      '<td>' + previewCell + '</td>' +
-      '<td><input type="text" data-pfield="sampleId" data-pi="' + i + '" value="' + escapeAttr(pc.sampleId) + '" style="width:110px;"></td>' +
-      '<td><select data-pfield="category" data-pi="' + i + '">' + Calc.CATEGORY_VOCABULARY.map(function (cat) {
-        return '<option value="' + cat + '"' + (cat === pc.category ? ' selected' : '') + '>' + cat + '</option>';
-      }).join('') + '</select></td>' +
-      '<td><input type="checkbox" data-pfield="vip" data-pi="' + i + '" ' + (pc.vip ? 'checked' : '') + '></td>' +
-      '<td><select data-pfield="batchId" data-pi="' + i + '">' + batchOptionsHtml(pc.batchId) + '</select></td>' +
-      '<td>' + (needsLink ? '<select data-pfield="linkedFirstRunColumnId" data-pi="' + i + '">' + firstRunOptionsHtml(i, pc.linkedFirstRunColumnId) + '</select>' : '<span class="hint">—</span>') + '</td>' +
-      '<td><button data-action="remove-pending" data-pi="' + i + '" class="link-btn danger">Remove</button></td>' +
-    '</tr>';
+    return '<th><div class="classify-col-header">' +
+      '<div class="classify-select-row">' +
+        '<input type="checkbox" data-action="select-pending" data-pi="' + i + '"' + (pendingSelectedIndices.has(i) ? ' checked' : '') + '>' +
+        '<input type="text" class="classify-sampleid-input" data-pfield="sampleId" data-pi="' + i + '" value="' + escapeAttr(pc.sampleId) + '" placeholder="Sample ID">' +
+      '</div>' +
+      '<div><span class="tag-pill cat-' + pc.category.replace(' ', '-') + '">' + pc.category + '</span>' + vipBadge(pc.vip) + '</div>' +
+      (needsLink ? '<select class="classify-col-caption" data-pfield="linkedFirstRunColumnId" data-pi="' + i + '">' + firstRunOptionsHtml(i, pc.linkedFirstRunColumnId) + '</select>' : '') +
+      '<button class="link-btn danger" data-action="remove-pending" data-pi="' + i + '">Remove</button>' +
+    '</div></th>';
+  }).join('');
+
+  const rowsHtml = state.referencePanel.rows.map(function (ref, rowIdx) {
+    const cellsHtml = pendingGrid.rawColumns.map(function (col) { return '<td>' + formatParsedValue(col[rowIdx]) + '</td>'; }).join('');
+    return '<tr><td class="classify-peptide-col">' + escapeHtml(ref.peptide || ref.peptideId || ('Row ' + (rowIdx + 1))) + '</td>' + cellsHtml + '</tr>';
   }).join('');
 
   document.getElementById('classifyTable').innerHTML =
-    '<thead><tr><th>Preview</th><th>Sample ID</th><th>Category</th><th>VIP</th><th>Batch</th><th>Linked to (First-run)</th><th></th></tr></thead><tbody>' + rowsHtml + '</tbody>';
+    '<thead><tr><th class="classify-peptide-col">Peptide</th>' + headerCellsHtml + '</tr></thead><tbody>' + rowsHtml + '</tbody>';
 }
 
 function handleClassifyTableChange(e) {
   const el = e.target;
+  if (el.getAttribute('data-action') === 'select-pending') {
+    const i = Number(el.getAttribute('data-pi'));
+    if (el.checked) pendingSelectedIndices.add(i); else pendingSelectedIndices.delete(i);
+    return;
+  }
   const field = el.getAttribute('data-pfield');
   if (!field) return;
   const i = Number(el.getAttribute('data-pi'));
   const pc = pendingClassifications[i];
   if (!pc) return;
-  if (field === 'vip') pc.vip = el.checked;
-  else pc[field] = el.value;
-  // Category changes affect which columns are valid link targets, and switching
-  // away from Rerun/Duplicate clears a now-irrelevant link — always re-render.
-  if (field === 'category' && pc.category !== 'Rerun' && pc.category !== 'Duplicate') pc.linkedFirstRunColumnId = '';
+  pc[field] = el.value;
   renderClassifyStep();
 }
 
 function handleClassifyTableClick(e) {
-  const previewBtn = e.target.closest('button[data-action="open-preview"]');
-  if (previewBtn) { openPreviewModal(Number(previewBtn.getAttribute('data-pi'))); return; }
   const btn = e.target.closest('button[data-action="remove-pending"]');
   if (!btn) return;
   const i = Number(btn.getAttribute('data-pi'));
   pendingGrid.rawColumns.splice(i, 1);
   pendingGrid.columnCount--;
   pendingClassifications.splice(i, 1);
+  pendingSelectedIndices.clear(); // indices shifted; simplest to just ask the user to reselect
   if (pendingGrid.columnCount === 0) { pendingGrid = null; pendingClassifications = []; }
   renderClassifyStep();
 }
 
-// ---------------------------------------------------------------------
-// Preview modal — shows every parsed value for one pending pasted column,
-// aligned with its reference-panel peptide, so a column can be sanity
-// checked before it's saved.
-// ---------------------------------------------------------------------
-
-function openPreviewModal(i) {
-  const values = pendingGrid.rawColumns[i];
-  const labelCell = pendingGrid.labelRow && pendingGrid.labelRow[i] != null ? pendingGrid.labelRow[i].trim() : '';
-  document.getElementById('previewModalTitle').textContent = 'Column ' + (i + 1) + (labelCell ? ' — ' + labelCell : '');
-  document.getElementById('previewModalBody').innerHTML = values.map(function (v, rowIdx) {
-    const refRow = state.referencePanel.rows[rowIdx];
-    const label = refRow ? (refRow.peptide || refRow.peptideId || ('row ' + (rowIdx + 1))) : ('row ' + (rowIdx + 1));
-    return '<div>' + (rowIdx + 1) + '. ' + escapeHtml(label) + ': ' + formatParsedValue(v) + '</div>';
-  }).join('');
-  document.getElementById('previewModal').classList.remove('hidden');
-}
-function closePreviewModal() {
-  document.getElementById('previewModal').classList.add('hidden');
+function handleBulkClassifyApply() {
+  const category = document.getElementById('bulkCategorySelect').value;
+  const setVip = document.getElementById('bulkVipCheckbox').checked;
+  if (pendingSelectedIndices.size === 0) { alert('Select at least one column first.'); return; }
+  if (!category && !setVip) { alert('Choose a category or check VIP first.'); return; }
+  pendingSelectedIndices.forEach(function (i) {
+    const pc = pendingClassifications[i];
+    if (!pc) return;
+    if (category) {
+      pc.category = category;
+      // Switching away from Rerun/Duplicate clears a now-irrelevant link.
+      if (category !== 'Rerun' && category !== 'Duplicate') pc.linkedFirstRunColumnId = '';
+    }
+    if (setVip) pc.vip = true;
+  });
+  document.getElementById('bulkCategorySelect').value = '';
+  document.getElementById('bulkVipCheckbox').checked = false;
+  pendingSelectedIndices.clear(); // don't silently re-apply to the same columns next time
+  renderClassifyStep();
 }
 
 function handleCancelClassify() {
   pendingGrid = null;
   pendingClassifications = [];
   pendingAutoDetectCount = 0;
+  pendingSelectedIndices.clear();
   document.getElementById('gridPasteInput').value = '';
   renderClassifyStep();
   updateGridMismatchWarning();
@@ -1625,20 +1554,20 @@ function handleSaveClassified() {
   for (let i = 0; i < pendingClassifications.length; i++) {
     const pc = pendingClassifications[i];
     if (!pc.sampleId.trim()) { alert('Column ' + (i + 1) + ' is missing a Sample ID.'); return; }
-    if (!pc.batchId) { alert('Column ' + (i + 1) + ' (' + pc.sampleId + ') is missing a batch.'); return; }
     if ((pc.category === 'Rerun' || pc.category === 'Duplicate') && !pc.linkedFirstRunColumnId) {
       alert('Column ' + (i + 1) + ' (' + pc.sampleId + ') is tagged ' + pc.category + ' and must be linked to a First-run column.'); return;
     }
   }
 
   // Pass 1: create First-run columns first, so Rerun/Duplicate columns in the same
-  // paste can resolve a "pending:N" link to a real column id.
+  // paste can resolve a "pending:N" link to a real column id. Batch is left
+  // unassigned ('') — that's done in Section 3, below, once the column is saved.
   const pendingIndexToRealId = {};
   pendingClassifications.forEach(function (pc, i) {
     if (pc.category !== 'First-run') return;
     const col = {
       id: uid('col'), sampleId: pc.sampleId.trim(), category: 'First-run', vip: pc.vip,
-      batchId: pc.batchId, linkedFirstRunColumnId: null, values: pendingGrid.rawColumns[i], pastedAt: new Date().toISOString()
+      batchId: '', linkedFirstRunColumnId: null, values: pendingGrid.rawColumns[i], pastedAt: new Date().toISOString()
     };
     state.sampleColumns.push(col);
     pendingIndexToRealId[i] = col.id;
@@ -1654,7 +1583,7 @@ function handleSaveClassified() {
     }
     const col = {
       id: uid('col'), sampleId: pc.sampleId.trim(), category: pc.category, vip: pc.vip,
-      batchId: pc.batchId, linkedFirstRunColumnId: linkedId, values: pendingGrid.rawColumns[i], pastedAt: new Date().toISOString()
+      batchId: '', linkedFirstRunColumnId: linkedId, values: pendingGrid.rawColumns[i], pastedAt: new Date().toISOString()
     };
     state.sampleColumns.push(col);
   });
@@ -1664,12 +1593,13 @@ function handleSaveClassified() {
   pendingGrid = null;
   pendingClassifications = [];
   pendingAutoDetectCount = 0;
+  pendingSelectedIndices.clear();
   document.getElementById('gridPasteInput').value = '';
   renderClassifyStep();
   updateGridMismatchWarning();
 
   const msgEl = document.getElementById('pasteResultMsg');
-  msgEl.textContent = 'Saved ' + savedCount + ' column(s).';
+  msgEl.textContent = 'Saved ' + savedCount + ' column(s). Assign their batch in Section 3 below.';
   msgEl.classList.remove('hidden');
 
   renderRunsView();
@@ -1682,31 +1612,46 @@ function handleSaveClassified() {
 
 function renderRunsView() {
   renderSampleColumnsTable();
-  renderDerivedGroupsTable('Duplicate', 'duplicateGroupsTable');
-  renderDerivedGroupsTable('Rerun', 'rerunGroupsTable');
-  renderComparisonChecklists();
-  renderComparisonsTable();
+  renderPoolColumnsTable();
   renderStep3Guidance();
 }
 
 function renderSampleColumnsTable() {
-  const rowsHtml = state.sampleColumns.map(function (c) {
-    const canonical = Calc.matchBarcode(c.sampleId).canonical;
-    const validCount = c.values.filter(function (v) { return !Calc.isExcluded(v); }).length;
+  const cols = state.sampleColumns;
+  const allChecked = cols.length > 0 && cols.every(function (c) { return selectedSampleColumnIds.has(c.id); });
+  const rowsHtml = cols.map(function (c) {
     const linked = c.linkedFirstRunColumnId ? getColumn(c.linkedFirstRunColumnId) : null;
     return '<tr>' +
-      '<td>' + escapeHtml(c.sampleId) + (c.category !== 'First-run' ? '' : '') + '</td>' +
-      '<td>' + escapeHtml(canonical) + '</td>' +
-      '<td><span class="tag-pill cat-' + c.category.replace(' ', '-') + '">' + c.category + '</span>' + vipBadge(c.vip) + '</td>' +
+      '<td><input type="checkbox" data-action="select-col" data-id="' + c.id + '"' + (selectedSampleColumnIds.has(c.id) ? ' checked' : '') + '></td>' +
+      '<td>' + escapeHtml(c.sampleId) + '</td>' +
+      '<td><span class="tag-pill cat-' + c.category.replace(' ', '-') + '">' + c.category + '</span></td>' +
+      '<td>' + (c.vip ? 'Yes' : 'No') + '</td>' +
       '<td>' + escapeHtml(batchName(c.batchId)) + '</td>' +
       '<td>' + (linked ? escapeHtml(linked.sampleId) : '—') + '</td>' +
-      '<td>' + validCount + '/' + c.values.length + '</td>' +
       '<td><button data-action="delete-col" data-id="' + c.id + '" class="link-btn danger">Delete</button></td>' +
     '</tr>';
   }).join('');
   document.getElementById('sampleColumnsTable').innerHTML =
-    '<thead><tr><th>Sample ID</th><th>Canonical</th><th>Category</th><th>Batch</th><th>Linked to</th><th>Valid/Total</th><th></th></tr></thead><tbody>' +
+    '<thead><tr><th><input type="checkbox" data-action="select-all-samples"' + (allChecked ? ' checked' : '') + '></th>' +
+    '<th>Sample ID</th><th>Category</th><th>VIP</th><th>Batch</th><th>Linked to</th><th></th></tr></thead><tbody>' +
     (rowsHtml || '<tr><td colspan="7" class="hint">No sample columns pasted yet.</td></tr>') + '</tbody>';
+  document.getElementById('bulkAssignBatchSelect').innerHTML = batchOptionsHtml('');
+}
+
+function handleSampleColumnsTableChange(e) {
+  const el = e.target;
+  if (el.getAttribute('data-action') === 'select-all-samples') {
+    state.sampleColumns.forEach(function (c) {
+      if (el.checked) selectedSampleColumnIds.add(c.id); else selectedSampleColumnIds.delete(c.id);
+    });
+    renderSampleColumnsTable();
+    renderPoolColumnsTable();
+    return;
+  }
+  if (el.getAttribute('data-action') === 'select-col') {
+    const id = el.getAttribute('data-id');
+    if (el.checked) selectedSampleColumnIds.add(id); else selectedSampleColumnIds.delete(id);
+  }
 }
 
 function handleSampleColumnsTableClick(e) {
@@ -1715,24 +1660,39 @@ function handleSampleColumnsTableClick(e) {
   const id = btn.getAttribute('data-id');
   const dependents = state.sampleColumns.filter(function (c) { return c.linkedFirstRunColumnId === id; });
   if (dependents.length > 0) {
-    const ok = confirm('This column is linked to by ' + dependents.length + ' other column(s) (Rerun/Duplicate). Deleting it will leave those unlinked. Continue?');
+    const ok = confirm('This column is linked to by ' + dependents.length + ' other column(s) (Rerun/Duplicate/Pool plasma). Deleting it will leave those unlinked. Continue?');
     if (!ok) return;
   }
   state.sampleColumns = state.sampleColumns.filter(function (c) { return c.id !== id; });
   state.sampleColumns.forEach(function (c) { if (c.linkedFirstRunColumnId === id) c.linkedFirstRunColumnId = null; });
   saveSampleColumns();
-  state.poolPlasmaComparisons = state.poolPlasmaComparisons.filter(function (cmp) {
-    return cmp.sideAColumnIds.indexOf(id) === -1 && cmp.sideBColumnIds.indexOf(id) === -1;
+  selectedSampleColumnIds.delete(id);
+  renderRunsView();
+  renderSummary();
+}
+
+function handleBulkAssignBatch() {
+  const batchId = document.getElementById('bulkAssignBatchSelect').value;
+  if (!batchId) { alert('Choose a batch first.'); return; }
+  if (selectedSampleColumnIds.size === 0) { alert('Select at least one sample column first.'); return; }
+  selectedSampleColumnIds.forEach(function (id) {
+    const c = getColumn(id);
+    if (c) c.batchId = batchId;
   });
-  saveComparisons();
+  saveSampleColumns();
+  autoLinkPoolPlasma();
+  selectedSampleColumnIds.clear();
   renderRunsView();
   renderSummary();
 }
 
 /**
- * Groups columns of a given category (Duplicate|Rerun) by which First-run column
- * they link to. Grouping is fully derived — there's no separate "run" record to
- * create or ungroup, since the link itself is the grouping.
+ * Groups columns of a given category by which other column they link to.
+ * Grouping is fully derived — there's no separate "run"/"comparison" record to
+ * create or ungroup, since the link itself is the grouping. Used for
+ * Duplicate/Rerun (a First-run anchor with 1+ members) and, since a Pool
+ * plasma column's linkedFirstRunColumnId points at its one paired replicate,
+ * for Pool plasma pairs too.
  */
 function derivedGroups(category) {
   const groups = {};
@@ -1741,74 +1701,90 @@ function derivedGroups(category) {
     if (!groups[key]) groups[key] = { anchor: getColumn(key), members: [] };
     groups[key].members.push(c);
   });
-  // Drop any group whose anchor no longer exists (deleted First-run column).
+  // Drop any group whose anchor no longer exists (deleted column).
   Object.keys(groups).forEach(function (key) { if (!groups[key].anchor) delete groups[key]; });
   return groups;
 }
 
-function renderDerivedGroupsTable(category, containerId) {
-  const groups = derivedGroups(category);
-  const rowsHtml = Object.keys(groups).map(function (key) {
-    const g = groups[key];
-    return '<tr>' +
-      '<td>' + escapeHtml(g.anchor.sampleId) + vipBadge(g.anchor.vip || g.members.some(function (m) { return m.vip; })) + '</td>' +
-      '<td>' + escapeHtml(batchName(g.anchor.batchId)) + '</td>' +
-      '<td>' + g.members.map(function (m) { return escapeHtml(m.sampleId) + ' (' + escapeHtml(batchName(m.batchId)) + ')'; }).join(', ') + '</td>' +
-      '<td>' + g.members.length + '</td>' +
-    '</tr>';
-  }).join('');
-  document.getElementById(containerId).innerHTML =
-    '<thead><tr><th>First-run anchor</th><th>Anchor batch</th><th>' + category + ' member(s)</th><th># members</th></tr></thead><tbody>' +
-    (rowsHtml || '<tr><td colspan="4" class="hint">No ' + category.toLowerCase() + ' columns linked yet.</td></tr>') + '</tbody>';
+/** Pool plasma is modeled as exactly-2-column pairs (like Duplicate/Rerun's
+ * linkedFirstRunColumnId, just between two peers instead of member→anchor).
+ * Same-batch pairs are linked automatically (autoLinkPoolPlasma, below) right
+ * after batch assignment; anything left over — an odd one out, or a pair that
+ * spans two different batches — is linked manually here. */
+function poolPartnerOptionsHtml(colId, selectedId) {
+  const paired = {};
+  state.sampleColumns.forEach(function (c) {
+    if (c.category === 'Pool plasma' && c.linkedFirstRunColumnId) { paired[c.id] = true; paired[c.linkedFirstRunColumnId] = true; }
+  });
+  const options = ['<option value="">— link to… —</option>'];
+  state.sampleColumns.filter(function (c) {
+    return c.category === 'Pool plasma' && c.id !== colId && (!paired[c.id] || c.id === selectedId);
+  }).forEach(function (c) {
+    options.push('<option value="' + c.id + '"' + (c.id === selectedId ? ' selected' : '') + '>' + escapeHtml(c.sampleId) + ' (' + escapeHtml(batchName(c.batchId)) + ')</option>');
+  });
+  return options.join('');
 }
 
-function renderComparisonChecklists() {
-  const poolCols = state.sampleColumns.filter(function (c) { return c.category === 'Pool plasma'; });
-  function listHtml(side) {
-    return poolCols.length ? poolCols.map(function (c) {
-      return '<label><input type="checkbox" data-side="' + side + '" value="' + c.id + '"> ' + escapeHtml(c.sampleId) + ' (' + escapeHtml(batchName(c.batchId)) + ')</label>';
-    }).join('') : '<span class="hint">No Pool plasma columns yet.</span>';
+function renderPoolColumnsTable() {
+  const cols = state.sampleColumns.filter(function (c) { return c.category === 'Pool plasma'; });
+  const rowsHtml = cols.map(function (c) {
+    const linked = c.linkedFirstRunColumnId ? getColumn(c.linkedFirstRunColumnId) : null;
+    const linkedCell = linked
+      ? escapeHtml(linked.sampleId)
+      : '<select data-action="pool-link" data-id="' + c.id + '">' + poolPartnerOptionsHtml(c.id, '') + '</select>';
+    return '<tr>' +
+      '<td><input type="checkbox" data-action="select-col" data-id="' + c.id + '"' + (selectedSampleColumnIds.has(c.id) ? ' checked' : '') + '></td>' +
+      '<td>' + escapeHtml(c.sampleId) + '</td>' +
+      '<td><span class="tag-pill cat-Pool-plasma">Pool plasma</span></td>' +
+      '<td>' + (c.vip ? 'Yes' : 'No') + '</td>' +
+      '<td>' + escapeHtml(batchName(c.batchId)) + '</td>' +
+      '<td>' + linkedCell + '</td>' +
+    '</tr>';
+  }).join('');
+  document.getElementById('poolColumnsTable').innerHTML =
+    '<thead><tr><th></th><th>Sample ID</th><th>Category</th><th>VIP</th><th>Batch</th><th>Linked to</th></tr></thead><tbody>' +
+    (rowsHtml || '<tr><td colspan="6" class="hint">No Pool plasma columns yet.</td></tr>') + '</tbody>';
+}
+
+function handlePoolColumnsTableChange(e) {
+  const el = e.target;
+  if (el.getAttribute('data-action') === 'select-col') {
+    const id = el.getAttribute('data-id');
+    if (el.checked) selectedSampleColumnIds.add(id); else selectedSampleColumnIds.delete(id);
+    return;
   }
-  document.getElementById('sideAChecklist').innerHTML = listHtml('A');
-  document.getElementById('sideBChecklist').innerHTML = listHtml('B');
+  if (el.getAttribute('data-action') === 'pool-link') {
+    const col = getColumn(el.getAttribute('data-id'));
+    if (!col) return;
+    col.linkedFirstRunColumnId = el.value || null;
+    saveSampleColumns();
+    renderRunsView();
+    renderSummary();
+  }
 }
 
-function handleCreateComparison() {
-  const sideA = Array.from(document.querySelectorAll('input[data-side="A"]:checked')).map(function (cb) { return cb.value; });
-  const sideB = Array.from(document.querySelectorAll('input[data-side="B"]:checked')).map(function (cb) { return cb.value; });
-  if (sideA.length === 0 || sideB.length === 0) { alert('Pick at least one column on each side.'); return; }
-  const label = document.getElementById('comparisonLabelInput').value.trim() || 'Comparison ' + (state.poolPlasmaComparisons.length + 1);
-  state.poolPlasmaComparisons.push({ id: uid('cmp'), label: label, sideAColumnIds: sideA, sideBColumnIds: sideB, createdAt: new Date().toISOString() });
-  saveComparisons();
-  document.getElementById('comparisonLabelInput').value = '';
-  renderRunsView();
-  renderSummary();
-}
-
-function renderComparisonsTable() {
-  const rowsHtml = state.poolPlasmaComparisons.map(function (cmp) {
-    const sideA = cmp.sideAColumnIds.map(getColumn).filter(Boolean).map(function (c) { return c.sampleId; }).join(', ');
-    const sideB = cmp.sideBColumnIds.map(getColumn).filter(Boolean).map(function (c) { return c.sampleId; }).join(', ');
-    return '<tr>' +
-      '<td>' + escapeHtml(cmp.label) + '</td>' +
-      '<td>' + escapeHtml(sideA) + '</td>' +
-      '<td>' + escapeHtml(sideB) + '</td>' +
-      '<td><button data-action="delete-comparison" data-id="' + cmp.id + '" class="link-btn danger">Delete</button></td>' +
-    '</tr>';
-  }).join('');
-  document.getElementById('comparisonsTable').innerHTML =
-    '<thead><tr><th>Label</th><th>Side A</th><th>Side B</th><th></th></tr></thead><tbody>' +
-    (rowsHtml || '<tr><td colspan="4" class="hint">No comparisons created yet.</td></tr>') + '</tbody>';
-}
-
-function handleComparisonsTableClick(e) {
-  const btn = e.target.closest('button[data-action="delete-comparison"]');
-  if (!btn) return;
-  const id = btn.getAttribute('data-id');
-  state.poolPlasmaComparisons = state.poolPlasmaComparisons.filter(function (cmp) { return cmp.id !== id; });
-  saveComparisons();
-  renderRunsView();
-  renderSummary();
+/** After batches are assigned, pair up any still-unlinked Pool plasma columns
+ * within the same batch (two replicates of the same physical pool, e.g.
+ * R01/R02) so the common case never needs manual linking. An odd one out, or
+ * a pair that's meant to span two different batches, is left for manual
+ * linking in the table above. Only considers columns that already have a
+ * batch — pairing unassigned columns together would be pure guesswork about
+ * which batch they'll eventually land in. */
+function autoLinkPoolPlasma() {
+  const paired = {};
+  state.sampleColumns.forEach(function (c) {
+    if (c.category === 'Pool plasma' && c.linkedFirstRunColumnId) { paired[c.id] = true; paired[c.linkedFirstRunColumnId] = true; }
+  });
+  const byBatch = {};
+  state.sampleColumns.forEach(function (c) {
+    if (c.category !== 'Pool plasma' || paired[c.id] || !c.batchId) return;
+    (byBatch[c.batchId] = byBatch[c.batchId] || []).push(c);
+  });
+  Object.keys(byBatch).forEach(function (batchId) {
+    const cols = byBatch[batchId];
+    for (let i = 0; i + 1 < cols.length; i += 2) cols[i + 1].linkedFirstRunColumnId = cols[i].id;
+  });
+  saveSampleColumns();
 }
 
 // ---------------------------------------------------------------------
@@ -1837,17 +1813,20 @@ function computeRerunResult(group) {
   return { anchor: group.anchor, members: group.members, batchResult: batchResult, decision: decision, sampleRatio: sampleRatio };
 }
 
-function computePoolPlasmaResult(comparison) {
-  const sideA = comparison.sideAColumnIds.map(getColumn).filter(Boolean);
-  const sideB = comparison.sideBColumnIds.map(getColumn).filter(Boolean);
+/** A Pool plasma "comparison" is just a linked pair of columns (like Duplicate/
+ * Rerun groups) — group.anchor and its one member. Calc.poolPlasmaAnalysis
+ * still takes two replicate-arrays per peptide, so each side here is simply a
+ * single-column array. */
+function computePoolPlasmaResult(group) {
+  const a = group.anchor, b = group.members[0];
   const sideARows = state.referencePanel.rows.map(function (ref, i) {
-    return Object.assign({}, ref, { poolReplicates: sideA.map(function (c) { return c.values[i]; }) });
+    return Object.assign({}, ref, { poolReplicates: [a.values[i]] });
   });
   const sideBRows = state.referencePanel.rows.map(function (ref, i) {
-    return Object.assign({}, ref, { poolReplicates: sideB.map(function (c) { return c.values[i]; }) });
+    return Object.assign({}, ref, { poolReplicates: [b.values[i]] });
   });
   const batchResult = Calc.poolPlasmaAnalysis(sideARows, sideBRows);
-  return { comparison: comparison, sideA: sideA, sideB: sideB, batchResult: batchResult };
+  return { anchor: a, partner: b, batchResult: batchResult };
 }
 
 // ---------------------------------------------------------------------
@@ -1970,12 +1949,12 @@ function renderRerunSampleCard(anchorId) {
   });
 }
 
-function renderPoolPlasmaCard(comparisonId) {
-  const comparison = state.poolPlasmaComparisons.find(function (c) { return c.id === comparisonId; });
-  const res = computePoolPlasmaResult(comparison);
-  const cardId = 'pool_' + comparisonId;
-  const sideALabel = res.sideA.map(function (c) { return c.sampleId; }).join(', ') + ' (' + batchName(res.sideA[0] ? res.sideA[0].batchId : null) + ')';
-  const sideBLabel = res.sideB.map(function (c) { return c.sampleId; }).join(', ') + ' (' + batchName(res.sideB[0] ? res.sideB[0].batchId : null) + ')';
+function renderPoolPlasmaCard(anchorId) {
+  const group = derivedGroups('Pool plasma')[anchorId];
+  const res = computePoolPlasmaResult(group);
+  const cardId = 'pool_' + anchorId;
+  const anchorLabel = res.anchor.sampleId + ' (' + batchName(res.anchor.batchId) + ')';
+  const partnerLabel = res.partner.sampleId + ' (' + batchName(res.partner.batchId) + ')';
   const c = res.batchResult.counts;
   const facts = [
     c.validPeptideCount + ' valid peptide(s) compared (BLQ/NR/error excluded).',
@@ -1998,8 +1977,8 @@ function renderPoolPlasmaCard(comparisonId) {
   const drilldownHtml = renderDrilldownTable(cardId, res.batchResult.perPeptide, poolPlasmaDrilldownColumns(), isFlagged);
   return renderCardShell({
     id: cardId,
-    title: 'Pool plasma — ' + escapeHtml(comparison.label),
-    subtitle: 'Side A: ' + escapeHtml(sideALabel) + ' &nbsp;↔&nbsp; Side B: ' + escapeHtml(sideBLabel),
+    title: 'Pool plasma — ' + escapeHtml(res.anchor.sampleId) + ' &amp; ' + escapeHtml(res.partner.sampleId),
+    subtitle: escapeHtml(anchorLabel) + ' &nbsp;↔&nbsp; ' + escapeHtml(partnerLabel),
     verdict: res.batchResult.verdict,
     factsHtml: factsHtml,
     metricsHtml: metricsHtml,
@@ -2137,10 +2116,9 @@ function renderSummary() {
   const rerunIds = Object.keys(rerunGroups);
   document.getElementById('rerunCards').innerHTML = rerunIds.length ? rerunIds.map(renderRerunSampleCard).join('') : '<p class="hint">No rerun columns linked yet.</p>';
 
-  const comparisons = state.poolPlasmaComparisons;
-  document.getElementById('poolPlasmaCards').innerHTML = comparisons.length
-    ? comparisons.map(function (c) { return renderPoolPlasmaCard(c.id); }).join('')
-    : '<p class="hint">No pool plasma comparisons created yet.</p>';
+  const poolGroups = derivedGroups('Pool plasma');
+  const poolIds = Object.keys(poolGroups);
+  document.getElementById('poolPlasmaCards').innerHTML = poolIds.length ? poolIds.map(renderPoolPlasmaCard).join('') : '<p class="hint">No pool plasma columns linked yet.</p>';
 }
 
 // ---------------------------------------------------------------------
@@ -2205,29 +2183,19 @@ function wireStaticHandlers() {
   document.getElementById('refPanelTable').addEventListener('click', handleRefPanelTableClick);
 
   document.getElementById('addBatchBtn').addEventListener('click', handleAddBatch);
-  document.getElementById('toggleNewBatchBtn').addEventListener('click', handleToggleNewBatchRow);
-  document.getElementById('cancelNewBatchBtn').addEventListener('click', handleCancelNewBatch);
   document.getElementById('batchChips').addEventListener('click', handleBatchChipsClick);
-  document.getElementById('activeBatchSelect').addEventListener('change', handleActiveBatchChange);
-  document.getElementById('bulkBatchApplyBtn').addEventListener('click', handleBulkApplyBatch);
   document.getElementById('gridPasteInput').addEventListener('input', updateGridMismatchWarning);
   document.getElementById('parseGridBtn').addEventListener('click', handleParseGrid);
   document.getElementById('classifyTable').addEventListener('change', handleClassifyTableChange);
   document.getElementById('classifyTable').addEventListener('click', handleClassifyTableClick);
+  document.getElementById('bulkClassifyApplyBtn').addEventListener('click', handleBulkClassifyApply);
   document.getElementById('saveClassifiedBtn').addEventListener('click', handleSaveClassified);
   document.getElementById('cancelClassifyBtn').addEventListener('click', handleCancelClassify);
 
   document.getElementById('sampleColumnsTable').addEventListener('click', handleSampleColumnsTableClick);
-  document.getElementById('createComparisonBtn').addEventListener('click', handleCreateComparison);
-  document.getElementById('comparisonsTable').addEventListener('click', handleComparisonsTableClick);
-
-  document.getElementById('previewModalCloseBtn').addEventListener('click', closePreviewModal);
-  document.getElementById('previewModal').addEventListener('click', function (e) {
-    if (e.target.id === 'previewModal') closePreviewModal();
-  });
-  document.addEventListener('keydown', function (e) {
-    if (e.key === 'Escape') closePreviewModal();
-  });
+  document.getElementById('sampleColumnsTable').addEventListener('change', handleSampleColumnsTableChange);
+  document.getElementById('bulkAssignBatchApplyBtn').addEventListener('click', handleBulkAssignBatch);
+  document.getElementById('poolColumnsTable').addEventListener('change', handlePoolColumnsTableChange);
 
   document.getElementById('summarySideNav').addEventListener('click', function (e) {
     const link = e.target.closest('.side-nav-link');
