@@ -4,41 +4,51 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Rerun Sample QC Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Lato:wght@400;700;900&display=swap" rel="stylesheet">
 <style>
   :root{
-    /* Molecular You brand palette (pulled from molecularyou.com's own stylesheet) */
-    --bg:#F6FCFF; --card-bg:#ffffff; --border:#DCE7ED; --text:#18374B; --muted:#61859D;
+    /* Molecular You brand palette v2 — from design_handoff_rerun_qc_redesign */
+    --bg:#F6FCFF; --card-bg:#ffffff; --border:#E3EEF3; --border-table:#EEF5F8; --border-form:#D7E6EC;
+    --text:#18374B; --muted:#61859D; --muted-2:#9AB6C4; --seafoam:#8CCFCF;
     --pass-bg:#F0F9F4; --pass-text:#2E7D5C; --pass-accent:#7EBC9A; --fail-bg:#fdecea; --fail-text:#c62828;
-    --warn-bg:#fff4e5; --warn-text:#8a5a00; --accent:#18374B; --accent-dark:#0F2738; --accent-soft:#E9F0F5;
-    --shadow-sm:0 1px 2px rgba(24,55,75,0.06); --shadow-md:0 4px 16px rgba(24,55,75,0.10);
+    --warn-bg:#FBF1E0; --warn-text:#C98A1F; --warn-border:#E9CE93;
+    --accent:#18374B; --accent-dark:#0F2536; --accent-soft:#E9F0F5;
+    --shadow-sm:0 1px 2px rgba(24,55,75,0.06); --shadow-md:0 1px 2px rgba(24,55,75,0.06), 0 1px 8px rgba(24,55,75,0.04);
   }
   *{ box-sizing:border-box; }
   .icon{ width:1em; height:1em; display:inline-block; vertical-align:-0.15em; flex-shrink:0; }
-  body{ font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; background:var(--bg); color:var(--text); margin:0; -webkit-font-smoothing:antialiased; }
-  header{ display:flex; align-items:center; padding:12px 20px; background:#fff; border-bottom:1px solid var(--border); gap:16px; position:sticky; top:0; z-index:10; box-shadow:var(--shadow-sm); }
-  header h1{ font-size:16px; font-weight:700; margin:0; letter-spacing:-0.01em; flex-shrink:0; }
-  nav.stepper{ display:flex; align-items:center; flex-wrap:nowrap; gap:0; flex:1; min-width:0; overflow-x:auto; }
-  .step-connector{ width:14px; height:2px; background:var(--border); margin:0 2px; flex-shrink:0; }
-  .step-connector.done{ background:var(--pass-accent); }
-  .nav-btn{ display:flex; align-items:center; gap:6px; padding:5px 12px 5px 5px; border:1px solid var(--border); background:#fff; border-radius:999px; cursor:pointer; font-size:12.5px; font-weight:500; color:var(--text); white-space:nowrap; flex-shrink:0; transition:border-color .15s ease, box-shadow .15s ease, background .15s ease; }
-  .nav-btn:hover{ border-color:var(--accent); }
-  .step-num{ width:20px; height:20px; border-radius:50%; background:#eef1f5; color:var(--muted); display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:700; flex-shrink:0; transition:background .15s ease, color .15s ease; }
-  .nav-btn.active{ background:var(--accent); color:#fff; border-color:var(--accent); box-shadow:0 2px 10px rgba(24,55,75,0.35); }
-  .nav-btn.active .step-num{ background:#fff; color:var(--accent); }
-  header h1{ cursor:pointer; }
-  header h1:hover{ color:var(--accent-dark); }
-  .assumptions-toggle{ background:var(--warn-bg); color:var(--warn-text); border:1px solid #f0c36d; border-radius:50%; width:30px; height:30px; padding:0; cursor:pointer; font-size:14px; flex-shrink:0; display:flex; align-items:center; justify-content:center; position:relative; transition:filter .15s ease; }
+  body{ font-family:'Lato',-apple-system,'Helvetica Neue',Arial,sans-serif; background:var(--bg); color:var(--text); margin:0; -webkit-font-smoothing:antialiased; }
+  header{ display:block; background:#fff; border-bottom:1px solid var(--border); position:sticky; top:0; z-index:10; }
+  .header-inner{ display:flex; align-items:center; gap:32px; max-width:1280px; margin:0 auto; padding:14px 32px; }
+  .header-logo{ display:flex; align-items:center; gap:10px; cursor:pointer; flex-shrink:0; }
+  .header-logo:hover .header-logo-word{ color:var(--accent-dark); }
+  .header-logo-mark{ width:30px; height:30px; border-radius:8px; background:var(--accent); color:var(--seafoam); display:flex; align-items:center; justify-content:center; font-weight:900; font-size:13px; letter-spacing:-0.02em; flex-shrink:0; }
+  .header-logo-word{ font-weight:900; font-size:15px; color:var(--text); letter-spacing:-0.01em; white-space:nowrap; transition:color .15s ease; }
+  nav.stepper{ display:flex; align-items:center; justify-content:center; gap:28px; flex:1; min-width:0; }
+  nav.stepper.hidden{ display:none; }
+  .nav-btn{ display:flex; align-items:center; gap:10px; padding:0; border:none; background:none; cursor:pointer; flex-shrink:0; }
+  .step-num{ width:26px; height:26px; border-radius:999px; background:#fff; border:1.5px solid var(--border-form); color:var(--muted); display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:700; flex-shrink:0; transition:background .15s ease, border-color .15s ease, color .15s ease; }
+  .step-num svg{ width:14px; height:14px; stroke-width:3; }
+  .step-label{ font-size:13px; font-weight:700; color:var(--muted); white-space:nowrap; transition:color .15s ease; }
+  .nav-btn.active .step-num{ background:var(--accent); border-color:var(--accent); color:#fff; }
+  .nav-btn.active .step-label{ color:var(--text); }
+  .nav-btn.done .step-num{ background:var(--seafoam); border-color:var(--seafoam); color:var(--accent); }
+  .nav-btn.done .step-label{ color:var(--text); }
+  .assumptions-toggle{ background:var(--warn-bg); color:var(--warn-text); border:1px solid var(--warn-border); border-radius:50%; width:28px; height:28px; padding:0; cursor:pointer; font-size:14px; flex-shrink:0; display:flex; align-items:center; justify-content:center; position:relative; transition:filter .15s ease; }
   .assumptions-toggle:hover{ filter:brightness(0.95); }
-  .assumptions-count{ position:absolute; top:-4px; right:-4px; background:var(--warn-text); color:#fff; border-radius:50%; min-width:15px; height:15px; padding:0 2px; font-size:9.5px; line-height:15px; text-align:center; font-weight:700; }
-  .assumptions-panel{ background:#fff8ec; border-bottom:1px solid #f0c36d; padding:14px 24px; font-size:13px; }
+  .assumptions-count{ position:absolute; top:-4px; right:-4px; background:var(--warn-text); color:#fff; border-radius:50%; min-width:14px; height:14px; padding:0 2px; font-size:9px; line-height:14px; text-align:center; font-weight:700; }
+  .header-save-link{ background:none; border:none; color:var(--muted); font-weight:700; font-size:13px; cursor:pointer; padding:6px 4px; flex-shrink:0; white-space:nowrap; transition:color .15s ease; }
+  .header-save-link:hover{ color:var(--text); }
+  .assumptions-panel{ background:#FFFBF0; border-bottom:1px solid var(--warn-border); padding:14px 32px; font-size:13px; line-height:1.6; }
   .assumptions-panel ul{ margin:8px 0 0; padding-left:20px; }
   .hidden{ display:none !important; }
-  main{ max-width:1200px; margin:0 auto; padding:24px 24px 60px; }
+  main{ max-width:1220px; margin:0 auto; padding:24px 24px 60px; }
   .view{ display:none; }
   .view.active{ display:block; }
   h2{ font-size:17px; font-weight:700; margin:0 0 4px; padding-top:28px; letter-spacing:-0.01em; }
   h3.subhead{ font-size:13.5px; font-weight:700; text-transform:uppercase; letter-spacing:0.04em; margin-top:24px; color:var(--muted); }
-  .hint{ color:var(--muted); font-size:13px; }
+  .hint{ color:var(--muted-2); font-size:13px; }
   .modal-overlay{ position:fixed; inset:0; background:rgba(20,24,30,0.5); display:flex; align-items:center; justify-content:center; z-index:100; }
   .modal-overlay.hidden{ display:none; }
   .modal-box{ position:relative; background:#fff; border-radius:12px; padding:18px 22px; max-width:420px; width:90%; max-height:80vh; display:flex; flex-direction:column; box-shadow:0 12px 40px rgba(0,0,0,0.28); }
@@ -46,7 +56,6 @@
   .modal-box-body{ overflow-y:auto; font-size:12.5px; color:var(--muted); background:#f8f9fb; border-radius:6px; padding:6px 8px; margin-top:8px; }
   .modal-box-body div{ padding:1px 0; }
   .modal-close-btn{ position:absolute; top:10px; right:14px; }
-  #saveAnalysisBtn{ flex-shrink:0; }
   .saved-analysis-save-row{ display:flex; gap:8px; margin:10px 0 14px; }
   .saved-analysis-save-row input[type=text]{ flex:1; }
   .saved-analyses-list{ display:flex; flex-direction:column; gap:8px; overflow-y:auto; }
@@ -158,25 +167,25 @@
   .step-gate{ opacity:0.5; pointer-events:none; }
 
   /* Landing page ---------------------------------------------------- */
-  .home-hero{ text-align:center; max-width:640px; margin:20px auto 32px; }
-  .home-title{ font-size:28px; font-weight:800; margin:0 0 10px; color:var(--text); letter-spacing:-0.02em; }
-  .home-subtitle{ font-size:14.5px; color:var(--muted); line-height:1.6; margin:0; }
-  .home-actions{ display:flex; gap:18px; max-width:820px; margin:0 auto 36px; flex-wrap:wrap; }
-  .home-action-card{ flex:1; min-width:260px; background:var(--card-bg); border:1px solid var(--border); border-radius:14px; padding:24px 22px; text-align:left; cursor:pointer; box-shadow:var(--shadow-md); transition:transform .15s ease, box-shadow .15s ease, border-color .15s ease; display:flex; flex-direction:column; gap:6px; }
-  .home-action-card:hover{ transform:translateY(-2px); box-shadow:0 10px 28px rgba(24,55,75,0.16); border-color:var(--accent); }
-  .home-action-card.disabled-hint{ opacity:0.6; }
-  .home-action-icon{ color:var(--accent); }
-  .home-action-icon .icon{ width:30px; height:30px; }
-  .home-action-title{ font-size:16px; font-weight:700; color:var(--text); }
-  .home-action-desc{ font-size:13px; color:var(--muted); line-height:1.5; }
-  .home-checklist{ max-width:820px; margin:0 auto; display:flex; flex-direction:column; gap:8px; }
-  .home-checklist-item{ display:flex; align-items:center; gap:12px; background:var(--card-bg); border:1px solid var(--border); border-radius:10px; padding:10px 14px; text-align:left; cursor:pointer; transition:border-color .15s ease, background .15s ease; }
-  .home-checklist-item:hover{ border-color:var(--accent); background:var(--accent-soft); }
-  .home-checklist-item.ready .home-checklist-dot{ background:var(--pass-bg); color:var(--pass-text); border-color:var(--pass-accent); }
-  .home-checklist-dot{ width:26px; height:26px; border-radius:50%; background:#eef1f5; color:var(--muted); border:1px solid var(--border); display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:700; flex-shrink:0; }
-  .home-checklist-dot .icon{ width:14px; height:14px; }
-  .home-checklist-text{ display:flex; flex-direction:column; gap:1px; font-size:13px; color:var(--text); }
-  .home-checklist-text .hint{ font-size:12px; }
+  section[data-view="home"]{ max-width:920px; margin:0 auto; padding-top:32px; }
+  .home-hero{ text-align:center; max-width:640px; margin:0 auto 64px; }
+  .home-eyebrow{ font-size:12px; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:var(--muted); margin-bottom:14px; }
+  .home-title{ font-size:36px; font-weight:900; margin:0 0 16px; color:var(--text); letter-spacing:-0.01em; }
+  .home-subtitle{ font-size:16px; color:var(--muted); line-height:1.6; margin:0 auto; max-width:560px; }
+  .home-cta-row{ display:flex; justify-content:center; margin-bottom:72px; }
+  .home-cta-btn{ background:var(--accent); color:#fff; border:none; padding:14px 28px; border-radius:8px; font-weight:700; font-size:15px; cursor:pointer; display:inline-flex; align-items:center; gap:10px; transition:background .15s ease; }
+  .home-cta-btn:hover{ background:var(--accent-dark); }
+  .home-saved-header{ display:flex; align-items:baseline; justify-content:space-between; margin-bottom:20px; }
+  .home-saved-header h2{ font-size:18px; font-weight:700; margin:0; }
+  .home-saved-list{ display:flex; flex-direction:column; gap:12px; }
+  .home-saved-card{ background:#fff; border-radius:12px; box-shadow:var(--shadow-md); padding:20px 24px; display:flex; align-items:center; gap:20px; }
+  .home-saved-card-info{ flex:1; min-width:0; }
+  .home-saved-card-name{ font-weight:700; font-size:15px; margin-bottom:4px; }
+  .home-saved-dots{ display:flex; align-items:center; gap:6px; flex-shrink:0; }
+  .home-saved-dot{ width:8px; height:8px; border-radius:999px; background:var(--border); }
+  .home-saved-dot.done{ background:var(--seafoam); }
+  .home-saved-open-btn{ background:#fff; color:var(--accent); border:1.5px solid var(--accent); padding:8px 16px; border-radius:8px; font-weight:700; font-size:13px; cursor:pointer; flex-shrink:0; transition:background .15s ease; }
+  .home-saved-open-btn:hover{ background:var(--bg); }
 
   /* Step guidance banners ------------------------------------------- */
   .step-guidance{ display:flex; align-items:center; gap:12px; border-radius:10px; padding:12px 16px; margin:12px 0 18px; }
@@ -207,16 +216,21 @@
 <body>
 
 <header>
-  <h1 id="homeLink" title="Back to home">Rerun Sample QC Dashboard</h1>
-  <nav class="stepper">
-    <button class="nav-btn" data-nav="setup"><span class="step-num">1</span>Reference Panel</button>
-    <span class="step-connector"></span>
-    <button class="nav-btn" data-nav="paste"><span class="step-num">2</span>Add &amp; Group Samples</button>
-    <span class="step-connector"></span>
-    <button class="nav-btn" data-nav="summary"><span class="step-num">3</span>Summary &amp; Drilldown</button>
-  </nav>
-  <button id="saveAnalysisBtn" class="secondary" title="Save current work as a named analysis">Save Analysis</button>
-  <button id="assumptionsToggle" class="assumptions-toggle"></button>
+  <div class="header-inner">
+    <div id="homeLink" class="header-logo" title="Back to home">
+      <span class="header-logo-mark">MY</span>
+      <span class="header-logo-word">Rerun Sample QC</span>
+    </div>
+    <nav class="stepper hidden" id="headerStepper">
+      <button class="nav-btn" data-nav="setup"><span class="step-num">1</span><span class="step-label">Reference Panel</span></button>
+      <button class="nav-btn" data-nav="paste"><span class="step-num">2</span><span class="step-label">Add &amp; Group Samples</span></button>
+      <button class="nav-btn" data-nav="summary"><span class="step-num">3</span><span class="step-label">Summary &amp; Drilldown</span></button>
+    </nav>
+    <div style="margin-left:auto; display:flex; align-items:center; gap:16px; flex-shrink:0;">
+      <button id="assumptionsToggle" class="assumptions-toggle"></button>
+      <button id="saveAnalysisBtn" class="header-save-link" title="Save current work as a named analysis">Save Analysis</button>
+    </div>
+  </div>
 </header>
 
 <div id="assumptionsPanel" class="assumptions-panel hidden">
@@ -237,7 +251,7 @@
   <div class="modal-box" style="max-width:540px;">
     <button id="savedAnalysesModalCloseBtn" class="link-btn modal-close-btn">✕ Close</button>
     <h3>Saved Analyses</h3>
-    <p class="hint" id="savedAnalysesModalHint"></p>
+    <p class="hint">Save your current reference panel, samples, and comparisons as a named snapshot you can come back to later — or load, overwrite, and delete existing ones below.</p>
     <div class="saved-analysis-save-row">
       <input type="text" id="savedAnalysisNameInput" placeholder="Name this analysis…" maxlength="80">
       <button id="saveNewAnalysisBtn" class="btn">Save current work</button>
@@ -250,23 +264,20 @@
 
   <section data-view="home" class="view active">
     <div class="home-hero">
-      <h2 class="home-title">Rerun Sample QC</h2>
-      <p class="home-subtitle">Automated pass/fail checks for rerun, duplicate, VIP, and pool-plasma biomarker samples — the same math you've been running by hand in the sheet, done in seconds.</p>
+      <div class="home-eyebrow">Sample QC Automation</div>
+      <h1 class="home-title">Rerun Sample QC</h1>
+      <p class="home-subtitle">Compare new peptide results against reference thresholds and prior runs, flag discrepancies, and get a recommendation on which value to trust.</p>
     </div>
-    <div class="home-actions">
-      <button class="home-action-card" id="startNewAnalysisCard">
-        <span class="home-action-icon" id="homeStartIcon"></span>
-        <span class="home-action-title">Start a New Analysis</span>
-        <span class="home-action-desc">Set up your reference panel, paste sample data, group your comparisons, and review results — step by step.</span>
-      </button>
-      <button class="home-action-card" id="continueAnalysisCard">
-        <span class="home-action-icon" id="homeContinueIcon"></span>
-        <span class="home-action-title">Continue Previous Analysis</span>
-        <span class="home-action-desc">Pick up where you left off — you'll be taken straight to the next step that needs your input.</span>
-      </button>
+    <div class="home-cta-row">
+      <button class="home-cta-btn" id="startNewAnalysisCard">Start a New Analysis <span id="homeCtaArrowIcon"></span></button>
     </div>
-    <h3 class="subhead" style="text-align:center;">Your progress</h3>
-    <div id="homeChecklist" class="home-checklist"></div>
+    <div class="home-saved">
+      <div class="home-saved-header">
+        <h2>Continue previous analysis</h2>
+        <span class="hint" id="homeSavedCount"></span>
+      </div>
+      <div id="homeSavedList" class="home-saved-list"></div>
+    </div>
   </section>
 
   <section data-view="setup" class="view">
@@ -475,10 +486,6 @@ let pendingGrid = null;           // { columnCount, rawColumns: ParsedValue[][] 
 let pendingClassifications = [];  // [{ sampleId, category, vip, batchId, linkedFirstRunColumnId }]
 let pendingAutoDetectCount = 0;   // how many pendingClassifications rows autoDetectDuplicates() just set
 
-// Whether the "Saved Analyses" modal was opened to save the current work or to
-// load a previous one — same modal/list, just a different hint and top row.
-let savedAnalysesModalMode = 'save'; // 'save' | 'continue'
-
 // Whether the "+ New batch" create-batch row is expanded. Only relevant once at
 // least one batch exists (it's always expanded before that, since there's
 // nothing yet to pick from).
@@ -499,7 +506,7 @@ const ICON_PATHS = {
   chart: '<path d="M4 20V11M10 20V4M16 20v-8"/><path d="M3 20h18"/>',
   printer: '<path d="M6 9V3h12v6"/><rect x="4" y="9" width="16" height="8" rx="1.5"/><path d="M8 17v4h8v-4"/><path d="M17 12.5h.01"/>',
   clipboard: '<rect x="6" y="4" width="12" height="17" rx="1.5"/><path d="M9 4V3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1"/><path d="M9 10.5h6M9 14h6M9 17.5h4"/>',
-  warning: '<path d="M12 3.2 21.5 20H2.5z"/><path d="M12 9v4.3"/><path d="M12 16.8h.01"/>',
+  warning: '<path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>',
   check: '<path d="M20 6 9 17l-5-5"/>',
   arrowRight: '<path d="M5 12h14"/><path d="M13 6l6 6-6 6"/>'
 };
@@ -761,23 +768,54 @@ function renderStep4Guidance() {
   });
 }
 
-function renderHomeChecklist() {
-  const r = stepReadiness();
-  const steps = [
-    { n: 1, label: 'Reference Panel', view: 'setup', ready: r.step1, readyNote: state.referencePanel.rows.length + ' peptide(s) loaded', pendingNote: 'Not set up yet' },
-    { n: 2, label: 'Add & Group Samples', view: 'paste', ready: r.step2 && r.step3,
-      readyNote: state.sampleColumns.length + ' column(s) added, comparisons linked',
-      pendingNote: !r.step2 ? 'No sample data yet' : 'Columns added — nothing grouped yet' },
-    { n: 3, label: 'Summary & Drilldown', view: 'summary', ready: r.step4, readyNote: 'Ready to review', pendingNote: 'Nothing to show yet' }
+/** Lightweight per-analysis progress dots for the Home screen's saved-analysis
+ * list. Approximate on purpose (not the full derivedGroups() logic that drives
+ * stepReadiness() for the live app) since a saved snapshot isn't the live
+ * `state` those functions read from — good enough for a decorative indicator. */
+function snapshotStepDots(snapshot) {
+  const linked = snapshot.sampleColumns.some(function (c) { return !!c.linkedFirstRunColumnId; });
+  const pooled = (snapshot.poolPlasmaComparisons || []).length > 0;
+  return [
+    snapshot.referencePanel.rows.length > 0,
+    snapshot.sampleColumns.length > 0,
+    linked || pooled
   ];
-  document.getElementById('homeChecklist').innerHTML = steps.map(function (s) {
-    return '<button class="home-checklist-item ' + (s.ready ? 'ready' : 'pending') + '" data-goto="' + s.view + '">' +
-      '<span class="home-checklist-dot">' + (s.ready ? icon('check') : s.n) + '</span>' +
-      '<span class="home-checklist-text"><strong>' + escapeHtml(s.label) + '</strong><span class="hint">' + escapeHtml(s.ready ? s.readyNote : s.pendingNote) + '</span></span>' +
-    '</button>';
+}
+
+function homeSavedCardHtml(item) {
+  const dotsHtml = item.dots.map(function (done) {
+    return '<span class="home-saved-dot' + (done ? ' done' : '') + '"></span>';
   }).join('');
-  const continueCard = document.getElementById('continueAnalysisCard');
-  if (continueCard) continueCard.classList.toggle('disabled-hint', !r.step1);
+  const dateLine = item.updatedAt ? 'Last edited ' + new Date(item.updatedAt).toLocaleString() : 'Not saved yet — resume to keep working';
+  return '<div class="home-saved-card">' +
+    '<div class="home-saved-card-info"><div class="home-saved-card-name">' + escapeHtml(item.name) + '</div><div class="hint">' + escapeHtml(dateLine) + '</div></div>' +
+    '<div class="home-saved-dots">' + dotsHtml + '</div>' +
+    '<button class="home-saved-open-btn" data-action="' + (item.isCurrent ? 'open-current' : 'open-analysis') + '"' + (item.isCurrent ? '' : ' data-id="' + item.id + '"') + '>Open</button>' +
+  '</div>';
+}
+
+/** The Home screen's "Continue previous analysis" list — named snapshots
+ * (state.analyses) plus, if there's meaningful unsaved progress, a leading
+ * "Current work" entry so it's never stranded with no way back in from Home. */
+function renderHomeSavedList() {
+  const rows = state.analyses.slice().sort(function (a, b) { return (b.updatedAt || '').localeCompare(a.updatedAt || ''); });
+  document.getElementById('homeSavedCount').textContent = rows.length + (rows.length === 1 ? ' saved' : ' saved');
+  const hasCurrentWork = state.referencePanel.rows.length > 0 || state.sampleColumns.length > 0;
+  let html = '';
+  if (hasCurrentWork) {
+    html += homeSavedCardHtml({ name: 'Current work (unsaved)', updatedAt: null, dots: snapshotStepDots(currentAnalysisSnapshot()), isCurrent: true });
+  }
+  html += rows.map(function (a) {
+    return homeSavedCardHtml({ id: a.id, name: a.name, updatedAt: a.updatedAt, dots: snapshotStepDots(a.snapshot), isCurrent: false });
+  }).join('');
+  document.getElementById('homeSavedList').innerHTML = html || '<p class="hint">No saved analyses yet — start one above, then use "Save Analysis" to come back to it later.</p>';
+}
+
+function handleHomeSavedListClick(e) {
+  const btn = e.target.closest('[data-action]');
+  if (!btn) return;
+  if (btn.getAttribute('data-action') === 'open-current') switchView(nextIncompleteStepView());
+  else handleLoadAnalysis(btn.getAttribute('data-id'));
 }
 
 /** "Start a New Analysis" clears the sample side of the working state (columns,
@@ -805,7 +843,7 @@ function handleStartNewAnalysis() {
   renderPasteView();
   renderRunsView();
   renderSummary();
-  renderHomeChecklist();
+  renderHomeSavedList();
   switchView('setup');
 }
 
@@ -848,7 +886,7 @@ function applyAnalysisSnapshot(snapshot) {
   renderPasteView();
   renderRunsView();
   renderSummary();
-  renderHomeChecklist();
+  renderHomeSavedList();
 }
 
 function getSavedAnalysis(id) { return state.analyses.find(function (a) { return a.id === id; }); }
@@ -856,11 +894,7 @@ function analysisSnapshotSummary(snapshot) {
   return snapshot.referencePanel.rows.length + ' peptide(s), ' + snapshot.sampleColumns.length + ' sample column(s)';
 }
 
-function openSavedAnalysesModal(mode) {
-  savedAnalysesModalMode = mode;
-  document.getElementById('savedAnalysesModalHint').textContent = mode === 'continue'
-    ? 'Load a saved analysis to pick up where you left off, or continue your current unsaved work below.'
-    : 'Save your current reference panel, samples, and comparisons as a named snapshot you can come back to later.';
+function openSavedAnalysesModal() {
   document.getElementById('savedAnalysisNameInput').value = '';
   renderSavedAnalysesList();
   document.getElementById('savedAnalysesModal').classList.remove('hidden');
@@ -871,15 +905,7 @@ function closeSavedAnalysesModal() {
 
 function renderSavedAnalysesList() {
   const rows = state.analyses.slice().sort(function (a, b) { return (b.updatedAt || '').localeCompare(a.updatedAt || ''); });
-  let html = '';
-  if (savedAnalysesModalMode === 'continue') {
-    html += '<div class="saved-analysis-row">' +
-      '<div class="saved-analysis-row-top"><span class="saved-analysis-row-name">Current work (unsaved)</span></div>' +
-      '<div class="saved-analysis-row-meta">' + analysisSnapshotSummary(currentAnalysisSnapshot()) + '</div>' +
-      '<div class="saved-analysis-row-actions"><button class="link-btn" data-action="continue-current">Continue →</button></div>' +
-    '</div>';
-  }
-  html += rows.map(function (a) {
+  const html = rows.map(function (a) {
     return '<div class="saved-analysis-row">' +
       '<div class="saved-analysis-row-top">' +
         '<span class="saved-analysis-row-name">' + escapeHtml(a.name) + '</span>' +
@@ -946,13 +972,12 @@ function handleSavedAnalysesListClick(e) {
   if (action === 'load-analysis') handleLoadAnalysis(id);
   else if (action === 'overwrite-analysis') handleOverwriteAnalysis(id);
   else if (action === 'delete-analysis') handleDeleteAnalysis(id);
-  else if (action === 'continue-current') { closeSavedAnalysesModal(); switchView(nextIncompleteStepView()); }
 }
 
 /** A handful of icon spots are static markup (not re-rendered on state
  * changes), so they're populated once at init rather than on every render. */
 function renderStaticIcons() {
-  const spots = { homeStartIcon: 'flask', homeContinueIcon: 'chart', exportPdfIcon: 'printer', copySummaryIcon: 'clipboard' };
+  const spots = { homeCtaArrowIcon: 'arrowRight', exportPdfIcon: 'printer', copySummaryIcon: 'clipboard' };
   Object.keys(spots).forEach(function (id) {
     const el = document.getElementById(id);
     if (el) el.innerHTML = icon(spots[id]);
@@ -2125,16 +2150,23 @@ function renderSummary() {
 function switchView(name) {
   const navBtns = Array.prototype.slice.call(document.querySelectorAll('.nav-btn'));
   const activeIndex = navBtns.findIndex(function (b) { return b.getAttribute('data-nav') === name; });
-  navBtns.forEach(function (b, i) { b.classList.toggle('active', i === activeIndex); });
-  // Light up connector lines before the active step, reinforcing that these
-  // are sequential stages rather than unrelated tabs.
-  document.querySelectorAll('.step-connector').forEach(function (c, i) { c.classList.toggle('done', i < activeIndex); });
+  // Steps before the active one show a seafoam checkmark instead of their
+  // number, reinforcing that these are sequential stages, not unrelated tabs.
+  navBtns.forEach(function (b, i) {
+    const isDone = activeIndex >= 0 && i < activeIndex;
+    b.classList.toggle('active', i === activeIndex);
+    b.classList.toggle('done', isDone);
+    const numEl = b.querySelector('.step-num');
+    if (numEl) numEl.innerHTML = isDone ? icon('check') : String(i + 1);
+  });
+  const stepperEl = document.getElementById('headerStepper');
+  if (stepperEl) stepperEl.classList.toggle('hidden', name === 'home');
   document.querySelectorAll('.view').forEach(function (v) { v.classList.toggle('active', v.getAttribute('data-view') === name); });
   window.scrollTo(0, 0);
   // Always re-render the view being entered so its guidance banner (and
   // everything else on it) reflects the latest state, even if the state
   // changed while the user was on a different tab.
-  if (name === 'home') renderHomeChecklist();
+  if (name === 'home') renderHomeSavedList();
   else if (name === 'setup') renderReferencePanelView();
   else if (name === 'paste') renderPasteView();
   else if (name === 'summary') renderSummary();
@@ -2146,13 +2178,8 @@ function wireStaticHandlers() {
   });
   document.getElementById('homeLink').addEventListener('click', function () { switchView('home'); });
   document.getElementById('startNewAnalysisCard').addEventListener('click', handleStartNewAnalysis);
-  // "Continue" only needs the saved-analyses picker if there's actually something
-  // saved to pick from — otherwise it's just the original "resume where I left off".
-  document.getElementById('continueAnalysisCard').addEventListener('click', function () {
-    if (state.analyses.length === 0) switchView(nextIncompleteStepView());
-    else openSavedAnalysesModal('continue');
-  });
-  document.getElementById('saveAnalysisBtn').addEventListener('click', function () { openSavedAnalysesModal('save'); });
+  document.getElementById('homeSavedList').addEventListener('click', handleHomeSavedListClick);
+  document.getElementById('saveAnalysisBtn').addEventListener('click', function () { openSavedAnalysesModal(); });
   document.getElementById('saveNewAnalysisBtn').addEventListener('click', handleSaveNewAnalysis);
   document.getElementById('savedAnalysisNameInput').addEventListener('keydown', function (e) {
     if (e.key === 'Enter') handleSaveNewAnalysis();
@@ -2253,7 +2280,7 @@ function wireSummaryScrollSpy() {
 function init() {
   renderStaticIcons();
   renderAssumptionsBanner();
-  renderHomeChecklist();
+  renderHomeSavedList();
   renderReferencePanelView();
   renderPasteView();
   renderRunsView();
