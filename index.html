@@ -406,7 +406,7 @@
       <p class="hint">Same sheet layout as Section 2, just different headers: paste the pooled-plasma columns for one or more runs. The run header (row 1, e.g. &ldquo;July 3A 2026 MRM 1.1 &hellip;&rdquo;) picks the batch, and the &ldquo;Pooled Human Plasma BRH&hellip;_R01 Calc'd Conc.&rdquo; label (row 2) becomes the Sample ID. Mean/CV and blank spacer columns are dropped — the app recalculates those. Replicates pasted under the same run header are paired for you.</p>
       <textarea id="poolPasteInput" rows="8" placeholder="July 3A 2026 MRM 1.1&#9;July 3A 2026 MRM 1.1&#10;Pooled Human Plasma BRH1447353_R01 Calc'd Conc.&#9;Pooled Human Plasma BRH1447353_R02 Calc'd Conc.&#10;BLQ &lt; 1.357&#9;BLQ &lt; 1.357&#10;3130.1&#9;3093.9"></textarea>
       <p id="poolMismatchWarning" class="warning hidden"></p>
-      <button id="parsePoolGridBtn">Parse columns</button>
+      <button id="parsePoolGridBtn" class="btn">Parse columns</button>
 
       <div id="poolClassifyStep" class="hidden">
         <p id="poolAutoDetectNote" class="hint hidden" style="color:var(--pass-text);"></p>
@@ -417,7 +417,7 @@
           <table class="classify-grid" id="poolClassifyTable"></table>
         </div>
         <div class="row" style="margin-top:12px;">
-          <button id="savePoolClassifiedBtn">Save pool plasma columns</button>
+          <button id="savePoolClassifiedBtn" class="btn">Save pool plasma columns</button>
           <button id="cancelPoolClassifyBtn" class="secondary">Cancel</button>
         </div>
       </div>
@@ -1464,30 +1464,69 @@ function renderPasteView() {
  * are ever checked (the max header shape Xukun's sheet uses).
  * @returns {number} 0, 1, or 2 — how many leading lines are headers, not data
  */
-function looksLikeNonValueRow(line) {
-  const cells = line.split('\t').map(function (c) { return c.trim(); }).filter(function (c) { return c !== ''; });
-  if (cells.length === 0) return false;
-  return cells.every(function (c) {
+function looksLikeNonValueRow(cells) {
+  const filled = cells.map(function (c) { return (c || '').trim(); }).filter(function (c) { return c !== ''; });
+  if (filled.length === 0) return false;
+  return filled.every(function (c) {
     const kind = Calc.parseValue(c).kind;
     return kind !== 'numeric' && kind !== 'blq' && kind !== 'nr';
   });
 }
-function detectHeaderRowCount(lines) {
-  if (lines.length > 0 && looksLikeNonValueRow(lines[0])) {
-    return (lines.length > 1 && looksLikeNonValueRow(lines[1])) ? 2 : 1;
+function detectHeaderRowCount(rows) {
+  if (rows.length > 0 && looksLikeNonValueRow(rows[0])) {
+    return (rows.length > 1 && looksLikeNonValueRow(rows[1])) ? 2 : 1;
   }
   return 0;
 }
 
-/** Split pasted text into lines, stripping a single trailing blank line (a
- * common copy/paste artifact) but preserving legitimate blank data rows. */
-function splitPastedLines(text) {
-  const lines = text.split(/\r?\n/);
-  if (lines.length > 0 && lines[lines.length - 1] === '') lines.pop();
-  return lines;
+/**
+ * Split pasted spreadsheet text into rows of cells. Cannot just split on
+ * newlines and tabs: when a copied cell contains a line break of its own, the
+ * clipboard wraps that cell in double quotes and keeps the break inside it —
+ * and the run header in Xukun's sheet is exactly that, a two-line cell
+ * ("July 3A 2026" / "MRM 1.1 N20250320 & S20250320"). Splitting blindly turns
+ * one header row into two, leaves the first row holding a single cell (so a
+ * two-column paste reads as one column), and shifts every value down. So: a
+ * double quote at the start of a cell opens a quoted run where tabs and
+ * newlines are literal text and a doubled "" is one quote character.
+ * A single trailing blank row — the usual copy/paste artifact — is dropped,
+ * but genuinely blank rows in the middle are preserved.
+ * @returns {string[][]} one array of cell strings per row
+ */
+function parseDelimitedRows(text) {
+  const rows = [];
+  let row = [], cell = '', inQuotes = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (inQuotes) {
+      if (ch !== '"') { cell += ch; continue; }
+      if (text[i + 1] === '"') { cell += '"'; i++; } else { inQuotes = false; }
+      continue;
+    }
+    if (ch === '"' && cell === '') { inQuotes = true; continue; }
+    if (ch === '\t') { row.push(cell); cell = ''; continue; }
+    if (ch === '\n' || ch === '\r') {
+      if (ch === '\r' && text[i + 1] === '\n') i++;
+      row.push(cell); rows.push(row); row = []; cell = '';
+      continue;
+    }
+    cell += ch;
+  }
+  row.push(cell);
+  rows.push(row);
+  const last = rows[rows.length - 1];
+  if (last.length === 1 && last[0] === '') rows.pop();
+  return rows;
 }
-function splitGridLines() { return splitPastedLines(document.getElementById('gridPasteInput').value); }
-function splitPoolLines() { return splitPastedLines(document.getElementById('poolPasteInput').value); }
+
+/** Header text from a pasted cell, with any line break inside the cell (see
+ * parseDelimitedRows) flattened to a single space so it reads on one line. */
+function headerCellText(cells, index) {
+  const raw = cells && cells[index] != null ? cells[index] : '';
+  return raw.replace(/\s+/g, ' ').trim();
+}
+function gridPastedRows() { return parseDelimitedRows(document.getElementById('gridPasteInput').value); }
+function poolPastedRows() { return parseDelimitedRows(document.getElementById('poolPasteInput').value); }
 
 /** Shared shape of both paste boxes (samples in Section 2, pool plasma in
  * Section 3): 0-2 header lines, then one value per reference-panel row, with
@@ -1498,22 +1537,34 @@ function splitPoolLines() { return splitPastedLines(document.getElementById('poo
  * @returns {null|{headerRowCount:number, dataLineCount:number, row1:string[]|null, row2:string[]|null, columnCount:number, rawColumns:Object[][]}}
  */
 function parsePastedBlock(text, expectedRows) {
-  const lines = splitPastedLines(text);
-  if (lines.length === 0) return null;
-  const headerRowCount = detectHeaderRowCount(lines);
-  const row1 = headerRowCount > 0 ? lines[0].split('\t') : null;
-  const row2 = headerRowCount === 2 ? lines[1].split('\t') : null;
-  let dataLines = lines.slice(headerRowCount);
-  const dataLineCount = dataLines.length;
-  while (dataLines.length < expectedRows) dataLines.push('');
-  if (dataLines.length > expectedRows) dataLines = dataLines.slice(0, expectedRows);
+  const rows = parseDelimitedRows(text);
+  if (rows.length === 0) return null;
+  const headerRowCount = detectHeaderRowCount(rows);
+  const row1 = headerRowCount > 0 ? rows[0] : null;
+  const row2 = headerRowCount === 2 ? rows[1] : null;
+  let dataRows = rows.slice(headerRowCount);
+  const dataLineCount = dataRows.length;
+  while (dataRows.length < expectedRows) dataRows.push([]);
+  if (dataRows.length > expectedRows) dataRows = dataRows.slice(0, expectedRows);
 
-  const splitLines = dataLines.map(function (l) { return l.split('\t'); });
-  const columnCount = row1 ? row1.length : Math.max.apply(null, splitLines.map(function (cells) { return cells.length; }));
+  // The header row is usually the widest (the sheet pads every row to the same
+  // number of tabs), but take whichever is wider so a data column that has no
+  // header text is still read rather than silently dropped.
+  let columnCount = Math.max.apply(null, dataRows.map(function (cells) { return cells.length; }).concat(row1 ? [row1.length] : []));
   const rawColumns = [];
   for (let c = 0; c < columnCount; c++) {
-    rawColumns.push(splitLines.map(function (cells) { return Calc.parseValue(cells[c] != null ? cells[c] : ''); }));
+    rawColumns.push(dataRows.map(function (cells) { return Calc.parseValue(cells[c] != null ? cells[c] : ''); }));
   }
+
+  // Trailing columns with no header text and no values at all are just the
+  // empty right edge of the copied selection, not columns the user meant.
+  while (columnCount > 0 && !headerCellText(row1, columnCount - 1) && !headerCellText(row2, columnCount - 1) &&
+         columnIsAllEmpty(rawColumns[columnCount - 1])) {
+    rawColumns.pop();
+    columnCount--;
+  }
+  if (columnCount === 0) return null;
+
   return {
     headerRowCount: headerRowCount, dataLineCount: dataLineCount,
     row1: row1, row2: row2, columnCount: columnCount, rawColumns: rawColumns
@@ -1530,13 +1581,13 @@ function dataRowCountNote(headerRowCount, dataLineCount, expected) {
 }
 
 function updateGridMismatchWarning() {
-  const lines = splitGridLines();
+  const rows = gridPastedRows();
   const expected = state.referencePanel.rows.length;
   const warningEl = document.getElementById('gridMismatchWarning');
-  if (lines.length === 0) { warningEl.classList.add('hidden'); return; }
+  if (rows.length === 0) { warningEl.classList.add('hidden'); return; }
 
-  const headerRowCount = detectHeaderRowCount(lines);
-  const dataLineCount = lines.length - headerRowCount;
+  const headerRowCount = detectHeaderRowCount(rows);
+  const dataLineCount = rows.length - headerRowCount;
   const parts = [];
   if (headerRowCount > 0) {
     parts.push('Detected ' + headerRowCount + ' header line(s) at the top (barcode' + (headerRowCount === 2 ? ' + label' : '') +
@@ -1557,13 +1608,13 @@ function handleParseGrid() {
   const block = parsePastedBlock(document.getElementById('gridPasteInput').value, state.referencePanel.rows.length);
   if (!block) { alert('Paste a grid first.'); return; }
 
-  const barcodeRow = block.row1;
   pendingGrid = { columnCount: block.columnCount, rawColumns: block.rawColumns, labelRow: block.row2 };
   pendingClassifications = [];
   pendingSelectedIndices.clear();
   for (let c = 0; c < block.columnCount; c++) {
-    const prefillId = barcodeRow && barcodeRow[c] != null ? barcodeRow[c].trim() : '';
-    pendingClassifications.push({ sampleId: prefillId, category: 'First-run', vip: false, linkedFirstRunColumnId: '' });
+    pendingClassifications.push({
+      sampleId: headerCellText(block.row1, c), category: 'First-run', vip: false, linkedFirstRunColumnId: ''
+    });
   }
   pendingAutoDetectCount = autoDetectDuplicates();
   renderClassifyStep();
@@ -1845,7 +1896,7 @@ function handleSaveClassified() {
  * time, along with the blank spacer column that usually follows. */
 const POOL_DERIVED_LABEL_PATTERN = /^(mean|average|avg|cv|%\s*cv|cv\s*%|sd|stdev|std\s*dev)$/i;
 
-function poolColumnIsAllEmpty(col) {
+function columnIsAllEmpty(col) {
   return col.every(function (pv) { return !pv || pv.kind === 'empty'; });
 }
 
@@ -1881,12 +1932,12 @@ function batchNameFromRunHeader(headerText) {
 }
 
 function updatePoolMismatchWarning() {
-  const lines = splitPoolLines();
+  const rows = poolPastedRows();
   const expected = state.referencePanel.rows.length;
   const warningEl = document.getElementById('poolMismatchWarning');
-  if (lines.length === 0) { warningEl.classList.add('hidden'); return; }
+  if (rows.length === 0) { warningEl.classList.add('hidden'); return; }
 
-  const headerRowCount = detectHeaderRowCount(lines);
+  const headerRowCount = detectHeaderRowCount(rows);
   const parts = [];
   if (headerRowCount === 2) {
     parts.push('Detected 2 header lines — row 1 is the run header (picks the batch), row 2 is the pooled plasma label (becomes the Sample ID).');
@@ -1895,7 +1946,7 @@ function updatePoolMismatchWarning() {
   } else {
     parts.push('No header lines detected — you\'ll need to type each column’s Sample ID and batch by hand.');
   }
-  const countNote = dataRowCountNote(headerRowCount, lines.length - headerRowCount, expected);
+  const countNote = dataRowCountNote(headerRowCount, rows.length - headerRowCount, expected);
   if (countNote) parts.push(countNote);
   warningEl.textContent = parts.join(' ');
   warningEl.classList.remove('hidden');
@@ -1915,11 +1966,11 @@ function handleParsePoolGrid() {
   const classifications = [];
   let droppedDerived = 0, droppedBlank = 0;
   for (let c = 0; c < block.columnCount; c++) {
-    const label = labelRow && labelRow[c] != null ? labelRow[c].trim() : '';
+    const label = headerCellText(labelRow, c);
     const col = block.rawColumns[c];
     if (POOL_DERIVED_LABEL_PATTERN.test(label)) { droppedDerived++; continue; }
-    if (label === '' && poolColumnIsAllEmpty(col)) { droppedBlank++; continue; }
-    const headerText = runHeaderRow && runHeaderRow[c] != null ? runHeaderRow[c].trim() : '';
+    if (label === '' && columnIsAllEmpty(col)) { droppedBlank++; continue; }
+    const headerText = headerCellText(runHeaderRow, c);
     keptColumns.push(col);
     classifications.push({
       sampleId: label, batchId: matchBatchByRunHeader(headerText), linkTo: '', headerText: headerText
