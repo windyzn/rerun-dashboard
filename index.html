@@ -201,6 +201,9 @@
   .classify-select-row{ display:flex; align-items:center; gap:6px; }
   .classify-sampleid-input{ flex:1; min-width:0; font-weight:700; }
   .classify-col-caption{ font-size:11px; color:var(--muted-2); }
+  .classify-col-runheader{ font-size:10.5px; font-weight:700; color:var(--muted-2); text-transform:uppercase; letter-spacing:0.04em; white-space:normal; max-width:190px; }
+  .classify-field-label{ font-size:10.5px; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:0.04em; }
+  .pool-dropped-note{ font-size:12.5px; color:var(--muted); margin:8px 0 0; }
 
   /* Landing page ---------------------------------------------------- */
   section[data-view="home"]{ max-width:920px; margin:0 auto; padding-top:32px; }
@@ -370,8 +373,8 @@
     </div>
 
     <div class="step-block">
-      <div class="step-block-header"><span class="step-num-badge">2</span><h3>Paste &amp; Classify Columns</h3></div>
-      <p class="hint">Paste a tab-delimited block of values, one column per sample run — as many as you like. Barcode header rows are auto-detected into Sample ID; classify each column's category and link Rerun/Duplicate/Pool plasma columns to their partner. Batches are assigned in Section 3, below.</p>
+      <div class="step-block-header"><span class="step-num-badge">2</span><h3>Paste &amp; Classify Samples</h3></div>
+      <p class="hint">Paste a tab-delimited block of values, one column per sample run — as many as you like. Barcode header rows are auto-detected into Sample ID; classify each column's category and link Rerun/Duplicate columns to their partner. Batches are assigned in Section 4, below. Pooled plasma columns have their own paste box in Section 3.</p>
       <textarea id="gridPasteInput" rows="8" placeholder="P4A-228G789&#9;P1-473G835&#10;P228G789 Calculated Concentration&#9;P473G835 Calculated Concentration&#10;BLQ&lt;1.357&#9;42.0&#10;13.53&#9;205.3"></textarea>
       <p id="gridMismatchWarning" class="warning hidden"></p>
       <button id="parseGridBtn">Parse columns</button>
@@ -399,7 +402,30 @@
     </div>
 
     <div class="step-block">
-      <div class="step-block-header"><span class="step-num-badge">3</span><h3>Sample Columns &amp; Grouping</h3></div>
+      <div class="step-block-header"><span class="step-num-badge">3</span><h3>Paste &amp; Classify Pool Plasma</h3></div>
+      <p class="hint">Same sheet layout as Section 2, just different headers: paste the pooled-plasma columns for one or more runs. The run header (row 1, e.g. &ldquo;July 3A 2026 MRM 1.1 &hellip;&rdquo;) picks the batch, and the &ldquo;Pooled Human Plasma BRH&hellip;_R01 Calc'd Conc.&rdquo; label (row 2) becomes the Sample ID. Mean/CV and blank spacer columns are dropped — the app recalculates those. Replicates pasted under the same run header are paired for you.</p>
+      <textarea id="poolPasteInput" rows="8" placeholder="July 3A 2026 MRM 1.1&#9;July 3A 2026 MRM 1.1&#10;Pooled Human Plasma BRH1447353_R01 Calc'd Conc.&#9;Pooled Human Plasma BRH1447353_R02 Calc'd Conc.&#10;BLQ &lt; 1.357&#9;BLQ &lt; 1.357&#10;3130.1&#9;3093.9"></textarea>
+      <p id="poolMismatchWarning" class="warning hidden"></p>
+      <button id="parsePoolGridBtn">Parse columns</button>
+
+      <div id="poolClassifyStep" class="hidden">
+        <p id="poolAutoDetectNote" class="hint hidden" style="color:var(--pass-text);"></p>
+        <div class="row classify-toolbar">
+          <span class="hint" id="poolClassifyColumnCount"></span>
+        </div>
+        <div class="classify-grid-scroll">
+          <table class="classify-grid" id="poolClassifyTable"></table>
+        </div>
+        <div class="row" style="margin-top:12px;">
+          <button id="savePoolClassifiedBtn">Save pool plasma columns</button>
+          <button id="cancelPoolClassifyBtn" class="secondary">Cancel</button>
+        </div>
+      </div>
+      <p id="poolPasteResultMsg" class="hint hidden" style="margin-top:8px;"></p>
+    </div>
+
+    <div class="step-block">
+      <div class="step-block-header"><span class="step-num-badge">4</span><h3>Sample Columns &amp; Grouping</h3></div>
       <div id="step3Guidance"></div>
 
       <div class="row classify-toolbar" style="margin-top:8px;">
@@ -418,7 +444,7 @@
       <table id="sampleColumnsTable"></table>
 
       <h3 class="subhead">Pool plasma comparisons</h3>
-      <p class="hint">Pool plasma columns are listed separately, each linked to its counterpart — mean and CV are calculated between the two linked columns. Same-batch pairs link automatically; link across batches manually below.</p>
+      <p class="hint">Pool plasma columns (pasted in Section 3) are listed separately, each paired with its counterpart — mean and CV are calculated between the two paired columns. Replicates from the same run pair automatically; a pair that spans two batches is linked manually below.</p>
       <table id="poolColumnsTable"></table>
     </div>
 
@@ -530,10 +556,19 @@ const uiState = { expanded: new Set(), drilldown: {} };
 
 // Transient (not persisted) bulk-paste-in-progress state.
 let pendingGrid = null;           // { columnCount, rawColumns: ParsedValue[][] }
-let pendingClassifications = [];  // [{ sampleId, category, vip, linkedFirstRunColumnId }] — batch is assigned later, in Section 3
+let pendingClassifications = [];  // [{ sampleId, category, vip, linkedFirstRunColumnId }] — batch is assigned later, in Section 4
 let pendingAutoDetectCount = 0;   // how many pendingClassifications rows autoDetectDuplicates() just set
 const pendingSelectedIndices = new Set();  // checked columns in the Section 2 classify grid, for bulk-classify
-const selectedSampleColumnIds = new Set(); // checked rows (any category) in Section 3, for bulk batch assignment
+
+// Section 3's pool plasma paste is its own pending buffer, parallel to the one
+// above: same grid shape, but every column is a Pool plasma column, so there's
+// no category to pick — what needs reviewing instead is each column's batch
+// (read from the run header) and which replicate it pairs with.
+let poolPendingGrid = null;             // { columnCount, rawColumns: ParsedValue[][] }
+let poolPendingClassifications = [];    // [{ sampleId, batchId, linkTo, headerText }]
+let poolPendingDroppedNote = '';        // what parse threw away (Mean/CV/spacer columns)
+let poolPendingAutoPairCount = 0;       // replicate pairs poolAutoPair() just linked
+const selectedSampleColumnIds = new Set(); // checked rows (any category) in Section 4, for bulk batch assignment
 let editingRefRowIndex = null;             // which reference panel row the edit modal is currently open on
 
 function uid(prefix) { return prefix + '_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
@@ -1294,7 +1329,7 @@ function handleLoadDemoData() {
 // ---------------------------------------------------------------------
 
 /** Batches are created once here and picked from a list everywhere else (the
- * classify grid's category pills, Section 3's batch-assign dropdown) — no
+ * classify grid's category pills, Section 4's batch-assign dropdown) — no
  * free-text batch field on individual columns. */
 function renderBatchChips() {
   document.getElementById('batchChips').innerHTML = state.batches.map(function (b) {
@@ -1404,6 +1439,8 @@ function renderPasteView() {
   document.getElementById('parseGridBtn').disabled = disabled;
   renderBatchChips();
   updateGridMismatchWarning();
+  updatePoolMismatchWarning();
+  renderPoolClassifyStep();
   renderStep2Guidance();
   // Runs & Grouping lives in this same tab now (it's the direct output of the
   // columns added just above), so keep it in sync too.
@@ -1442,12 +1479,54 @@ function detectHeaderRowCount(lines) {
   return 0;
 }
 
-/** Split the textarea into lines, stripping a single trailing blank line (a
+/** Split pasted text into lines, stripping a single trailing blank line (a
  * common copy/paste artifact) but preserving legitimate blank data rows. */
-function splitGridLines() {
-  const lines = document.getElementById('gridPasteInput').value.split(/\r?\n/);
+function splitPastedLines(text) {
+  const lines = text.split(/\r?\n/);
   if (lines.length > 0 && lines[lines.length - 1] === '') lines.pop();
   return lines;
+}
+function splitGridLines() { return splitPastedLines(document.getElementById('gridPasteInput').value); }
+function splitPoolLines() { return splitPastedLines(document.getElementById('poolPasteInput').value); }
+
+/** Shared shape of both paste boxes (samples in Section 2, pool plasma in
+ * Section 3): 0-2 header lines, then one value per reference-panel row, with
+ * columns running left to right. Only the MEANING of the header lines differs
+ * between the two — samples carry the barcode on row 1, pool plasma carries the
+ * run header there and the sample name on row 2 — so the splitting, padding and
+ * value parsing live here and each caller reads the header rows its own way.
+ * @returns {null|{headerRowCount:number, dataLineCount:number, row1:string[]|null, row2:string[]|null, columnCount:number, rawColumns:Object[][]}}
+ */
+function parsePastedBlock(text, expectedRows) {
+  const lines = splitPastedLines(text);
+  if (lines.length === 0) return null;
+  const headerRowCount = detectHeaderRowCount(lines);
+  const row1 = headerRowCount > 0 ? lines[0].split('\t') : null;
+  const row2 = headerRowCount === 2 ? lines[1].split('\t') : null;
+  let dataLines = lines.slice(headerRowCount);
+  const dataLineCount = dataLines.length;
+  while (dataLines.length < expectedRows) dataLines.push('');
+  if (dataLines.length > expectedRows) dataLines = dataLines.slice(0, expectedRows);
+
+  const splitLines = dataLines.map(function (l) { return l.split('\t'); });
+  const columnCount = row1 ? row1.length : Math.max.apply(null, splitLines.map(function (cells) { return cells.length; }));
+  const rawColumns = [];
+  for (let c = 0; c < columnCount; c++) {
+    rawColumns.push(splitLines.map(function (cells) { return Calc.parseValue(cells[c] != null ? cells[c] : ''); }));
+  }
+  return {
+    headerRowCount: headerRowCount, dataLineCount: dataLineCount,
+    row1: row1, row2: row2, columnCount: columnCount, rawColumns: rawColumns
+  };
+}
+
+/** Shared "your paste is a different height than the reference panel" sentence
+ * for both paste boxes — never blocking, since a short or long paste is still
+ * usable (missing rows read as empty, extra rows are dropped). */
+function dataRowCountNote(headerRowCount, dataLineCount, expected) {
+  if (dataLineCount === expected) return null;
+  return (headerRowCount > 0 ? 'Remaining ' : 'Pasted ') + dataLineCount + ' data row(s), but the reference panel has ' +
+    expected + ' row(s). Missing rows are treated as empty; extra rows are dropped. You can still parse.';
 }
 
 function updateGridMismatchWarning() {
@@ -1463,9 +1542,8 @@ function updateGridMismatchWarning() {
     parts.push('Detected ' + headerRowCount + ' header line(s) at the top (barcode' + (headerRowCount === 2 ? ' + label' : '') +
       ') — row 1 will auto-fill each column\'s Sample ID' + (headerRowCount === 2 ? ', row 2 is used to help auto-detect duplicates' : '') + '.');
   }
-  if (dataLineCount !== expected) {
-    parts.push((headerRowCount > 0 ? 'Remaining ' : 'Pasted ') + dataLineCount + ' data row(s), but the reference panel has ' + expected + ' row(s). Missing rows are treated as empty; extra rows are dropped. You can still parse.');
-  }
+  const countNote = dataRowCountNote(headerRowCount, dataLineCount, expected);
+  if (countNote) parts.push(countNote);
   if (parts.length > 0) {
     warningEl.textContent = parts.join(' ');
     warningEl.classList.remove('hidden');
@@ -1476,30 +1554,14 @@ function updateGridMismatchWarning() {
 
 function handleParseGrid() {
   if (state.referencePanel.rows.length === 0) { alert('Set up the reference panel first.'); return; }
-  let lines = splitGridLines();
-  if (lines.length === 0) { alert('Paste a grid first.'); return; }
+  const block = parsePastedBlock(document.getElementById('gridPasteInput').value, state.referencePanel.rows.length);
+  if (!block) { alert('Paste a grid first.'); return; }
 
-  const expected = state.referencePanel.rows.length;
-  const headerRowCount = detectHeaderRowCount(lines);
-  const barcodeRow = headerRowCount > 0 ? lines[0].split('\t') : null;
-  const labelRow = headerRowCount === 2 ? lines[1].split('\t') : null;
-  if (headerRowCount > 0) lines = lines.slice(headerRowCount);
-
-  while (lines.length < expected) lines.push('');
-  if (lines.length > expected) lines = lines.slice(0, expected);
-
-  const splitLines = lines.map(function (l) { return l.split('\t'); });
-  const columnCount = barcodeRow ? barcodeRow.length : Math.max.apply(null, splitLines.map(function (cells) { return cells.length; }));
-
-  const rawColumns = [];
-  for (let c = 0; c < columnCount; c++) {
-    rawColumns.push(splitLines.map(function (cells) { return Calc.parseValue(cells[c] != null ? cells[c] : ''); }));
-  }
-
-  pendingGrid = { columnCount: columnCount, rawColumns: rawColumns, labelRow: labelRow };
+  const barcodeRow = block.row1;
+  pendingGrid = { columnCount: block.columnCount, rawColumns: block.rawColumns, labelRow: block.row2 };
   pendingClassifications = [];
   pendingSelectedIndices.clear();
-  for (let c = 0; c < columnCount; c++) {
+  for (let c = 0; c < block.columnCount; c++) {
     const prefillId = barcodeRow && barcodeRow[c] != null ? barcodeRow[c].trim() : '';
     pendingClassifications.push({ sampleId: prefillId, category: 'First-run', vip: false, linkedFirstRunColumnId: '' });
   }
@@ -1616,8 +1678,13 @@ function renderClassifyStep() {
 
   document.getElementById('classifyColumnCount').textContent =
     pendingGrid.columnCount + ' column(s) pasted' + (pendingGrid.columnCount > 4 ? ' · scroll to review all' : '');
+  // 'Pool plasma' is deliberately left out here — pool columns are pasted in
+  // Section 3 instead, where the run-header/label rows and replicate pairing are
+  // read the way the sheet actually lays them out.
   document.getElementById('bulkCategorySelect').innerHTML =
-    '<option value="">Category…</option>' + Calc.CATEGORY_VOCABULARY.map(function (cat) {
+    '<option value="">Category…</option>' + Calc.CATEGORY_VOCABULARY.filter(function (cat) {
+      return cat !== 'Pool plasma';
+    }).map(function (cat) {
       return '<option value="' + cat + '">' + cat + '</option>';
     }).join('');
 
@@ -1721,7 +1788,7 @@ function handleSaveClassified() {
 
   // Pass 1: create First-run columns first, so Rerun/Duplicate columns in the same
   // paste can resolve a "pending:N" link to a real column id. Batch is left
-  // unassigned ('') — that's done in Section 3, below, once the column is saved.
+  // unassigned ('') — that's done in Section 4, below, once the column is saved.
   const pendingIndexToRealId = {};
   pendingClassifications.forEach(function (pc, i) {
     if (pc.category !== 'First-run') return;
@@ -1759,7 +1826,334 @@ function handleSaveClassified() {
   updateGridMismatchWarning();
 
   const msgEl = document.getElementById('pasteResultMsg');
-  msgEl.textContent = 'Saved ' + savedCount + ' column(s). Assign their batch in Section 3 below.';
+  msgEl.textContent = 'Saved ' + savedCount + ' column(s). Assign their batch in Section 4 below.';
+  msgEl.classList.remove('hidden');
+
+  renderRunsView();
+  renderSummary();
+}
+
+
+// ---------------------------------------------------------------------
+// Section 3: pool plasma paste & classify
+// ---------------------------------------------------------------------
+
+/** Columns the sheet computes next to each pool plasma pair (see the run block
+ * in Xukun's sheet: R01, R02, then Mean, then CV). They're recalculated by the
+ * app from the two replicates, so pasting a contiguous block that includes them
+ * shouldn't create phantom "Mean"/"CV" sample columns — they're dropped at parse
+ * time, along with the blank spacer column that usually follows. */
+const POOL_DERIVED_LABEL_PATTERN = /^(mean|average|avg|cv|%\s*cv|cv\s*%|sd|stdev|std\s*dev)$/i;
+
+function poolColumnIsAllEmpty(col) {
+  return col.every(function (pv) { return !pv || pv.kind === 'empty'; });
+}
+
+/** Batch for a pasted run header, e.g. "July 3A 2026 MRM 1.1 N20250320 &
+ * S20250320" -> the existing "July 2026 3A" batch. Matches on whole words
+ * rather than raw substrings, since the header carries extra method text and
+ * orders the parts differently than the batch names users type: every word of
+ * the batch name has to appear somewhere in the header, so "July 2026 3A" can't
+ * claim the "July 2A 2026 ..." run. Ties break toward the most specific
+ * (longest) batch name that still matches. */
+function batchWords(text) { return (text || '').toLowerCase().match(/[a-z0-9]+/g) || []; }
+function matchBatchByRunHeader(headerText) {
+  const headerTokens = batchWords(headerText);
+  if (headerTokens.length === 0) return '';
+  let bestId = '', bestLen = 0;
+  state.batches.forEach(function (b) {
+    const tokens = batchWords(b.name);
+    if (tokens.length === 0 || tokens.length <= bestLen) return;
+    const allPresent = tokens.every(function (t) { return headerTokens.indexOf(t) !== -1; });
+    if (allPresent) { bestId = b.id; bestLen = tokens.length; }
+  });
+  return bestId;
+}
+
+/** Batch-name suggestion when a run header matches nothing yet — the leading
+ * run part of the header, before the MRM method string ("July 3A 2026 MRM 1.1
+ * N20250320 & S20250320" -> "July 3A 2026"). Only a prefill; the user is shown
+ * it in a prompt and can type anything. */
+function batchNameFromRunHeader(headerText) {
+  const trimmed = (headerText || '').trim();
+  const mrmAt = trimmed.search(/\bMRM\b/i);
+  return (mrmAt > 0 ? trimmed.slice(0, mrmAt) : trimmed).trim().replace(/[\s,&\-]+$/, '');
+}
+
+function updatePoolMismatchWarning() {
+  const lines = splitPoolLines();
+  const expected = state.referencePanel.rows.length;
+  const warningEl = document.getElementById('poolMismatchWarning');
+  if (lines.length === 0) { warningEl.classList.add('hidden'); return; }
+
+  const headerRowCount = detectHeaderRowCount(lines);
+  const parts = [];
+  if (headerRowCount === 2) {
+    parts.push('Detected 2 header lines — row 1 is the run header (picks the batch), row 2 is the pooled plasma label (becomes the Sample ID).');
+  } else if (headerRowCount === 1) {
+    parts.push('Detected 1 header line — it will be read as the pooled plasma label (Sample ID). Include the run header line above it to have the batch picked for you.');
+  } else {
+    parts.push('No header lines detected — you\'ll need to type each column’s Sample ID and batch by hand.');
+  }
+  const countNote = dataRowCountNote(headerRowCount, lines.length - headerRowCount, expected);
+  if (countNote) parts.push(countNote);
+  warningEl.textContent = parts.join(' ');
+  warningEl.classList.remove('hidden');
+}
+
+function handleParsePoolGrid() {
+  if (state.referencePanel.rows.length === 0) { alert('Set up the reference panel first.'); return; }
+  const block = parsePastedBlock(document.getElementById('poolPasteInput').value, state.referencePanel.rows.length);
+  if (!block) { alert('Paste a grid first.'); return; }
+
+  // With 2 header rows the sample name is on row 2 and the run header on row 1;
+  // with only 1, that single line is the sample name and there's no run header.
+  const labelRow = block.row2 || block.row1;
+  const runHeaderRow = block.row2 ? block.row1 : null;
+
+  const keptColumns = [];
+  const classifications = [];
+  let droppedDerived = 0, droppedBlank = 0;
+  for (let c = 0; c < block.columnCount; c++) {
+    const label = labelRow && labelRow[c] != null ? labelRow[c].trim() : '';
+    const col = block.rawColumns[c];
+    if (POOL_DERIVED_LABEL_PATTERN.test(label)) { droppedDerived++; continue; }
+    if (label === '' && poolColumnIsAllEmpty(col)) { droppedBlank++; continue; }
+    const headerText = runHeaderRow && runHeaderRow[c] != null ? runHeaderRow[c].trim() : '';
+    keptColumns.push(col);
+    classifications.push({
+      sampleId: label, batchId: matchBatchByRunHeader(headerText), linkTo: '', headerText: headerText
+    });
+  }
+
+  if (keptColumns.length === 0) {
+    alert('No pool plasma columns found in that paste — every column looked like a Mean/CV or blank spacer column.');
+    return;
+  }
+
+  const droppedParts = [];
+  if (droppedDerived > 0) droppedParts.push(droppedDerived + ' Mean/CV column(s)');
+  if (droppedBlank > 0) droppedParts.push(droppedBlank + ' blank spacer column(s)');
+  poolPendingDroppedNote = droppedParts.length ? 'Dropped ' + droppedParts.join(' and ') + ' — the app recalculates mean and CV from the replicates.' : '';
+
+  poolPendingGrid = { columnCount: keptColumns.length, rawColumns: keptColumns };
+  poolPendingClassifications = classifications;
+  poolPendingAutoPairCount = poolAutoPair();
+  renderPoolClassifyStep();
+}
+
+/** Pairs up the pasted replicates the way the sheet groups them: columns under
+ * the same run header, left to right, two at a time (R01+R02, then R03+R04 if a
+ * run carries two pairs). The second column of each pair points at the first,
+ * matching how saved Pool plasma columns store a pair (linkedFirstRunColumnId
+ * between two peers). Columns with no run header fall into one group together,
+ * which is still the right guess for a straight two-column paste. */
+function poolAutoPair() {
+  const groups = {};
+  poolPendingClassifications.forEach(function (pc, i) {
+    const key = pc.headerText || '(no run header)';
+    (groups[key] = groups[key] || []).push(i);
+  });
+  let pairs = 0;
+  Object.keys(groups).forEach(function (key) {
+    const idx = groups[key];
+    for (let i = 0; i + 1 < idx.length; i += 2) {
+      poolPendingClassifications[idx[i + 1]].linkTo = 'pending:' + idx[i];
+      pairs++;
+    }
+  });
+  return pairs;
+}
+
+/** Saved Pool plasma columns that aren't already half of a pair — offered
+ * alongside this paste's own columns so a replicate pasted now can be paired
+ * with one pasted earlier (e.g. the two halves of a cross-batch comparison). */
+function poolSavedUnpairedColumns() {
+  const paired = {};
+  state.sampleColumns.forEach(function (c) {
+    if (c.category === 'Pool plasma' && c.linkedFirstRunColumnId) { paired[c.id] = true; paired[c.linkedFirstRunColumnId] = true; }
+  });
+  return state.sampleColumns.filter(function (c) { return c.category === 'Pool plasma' && !paired[c.id]; });
+}
+
+function poolPartnerOptionsForPendingHtml(index, selectedValue) {
+  // A column is unavailable if some other column in this paste already points at
+  // it, or if it already points at something itself (it's spoken for either way).
+  const takenTargets = {};
+  poolPendingClassifications.forEach(function (pc, j) {
+    if (j !== index && pc.linkTo) takenTargets[pc.linkTo] = true;
+  });
+  const options = ['<option value="">— unpaired —</option>'];
+  poolPendingClassifications.forEach(function (pc, j) {
+    if (j === index) return;
+    const value = 'pending:' + j;
+    if (value !== selectedValue && (takenTargets[value] || pc.linkTo)) return;
+    const label = '(this paste, col ' + (j + 1) + ') ' + (pc.sampleId || 'unnamed');
+    options.push('<option value="' + value + '"' + (value === selectedValue ? ' selected' : '') + '>' + escapeHtml(label) + '</option>');
+  });
+  poolSavedUnpairedColumns().forEach(function (c) {
+    const value = 'saved:' + c.id;
+    if (value !== selectedValue && takenTargets[value]) return;
+    const label = c.sampleId + ' (' + batchName(c.batchId) + ') — saved';
+    options.push('<option value="' + value + '"' + (value === selectedValue ? ' selected' : '') + '>' + escapeHtml(label) + '</option>');
+  });
+  return options.join('');
+}
+
+/** Same transposed layout as the sample classify grid (peptides down the sticky
+ * left column, pasted columns across), with the pool-specific fields in each
+ * header: Sample ID, batch, and the replicate it pairs with. */
+function renderPoolClassifyStep() {
+  const stepEl = document.getElementById('poolClassifyStep');
+  if (!poolPendingGrid) { stepEl.classList.add('hidden'); return; }
+  stepEl.classList.remove('hidden');
+
+  document.getElementById('poolClassifyColumnCount').textContent =
+    poolPendingGrid.columnCount + ' pool plasma column(s) pasted' + (poolPendingGrid.columnCount > 4 ? ' · scroll to review all' : '');
+
+  const noteEl = document.getElementById('poolAutoDetectNote');
+  const noteParts = [];
+  if (poolPendingAutoPairCount > 0) {
+    noteParts.push('Paired ' + poolPendingAutoPairCount + ' replicate pair(s) from the run header, and matched each column to its batch where the name lines up — review before saving.');
+  }
+  if (poolPendingDroppedNote) noteParts.push(poolPendingDroppedNote);
+  if (noteParts.length > 0) {
+    noteEl.innerHTML = icon('check') + ' ' + escapeHtml(noteParts.join(' '));
+    noteEl.classList.remove('hidden');
+  } else {
+    noteEl.classList.add('hidden');
+  }
+
+  const headerCellsHtml = poolPendingClassifications.map(function (pc, i) {
+    return '<th><div class="classify-col-header">' +
+      (pc.headerText ? '<div class="classify-col-runheader">' + escapeHtml(pc.headerText) + '</div>' : '') +
+      '<input type="text" class="classify-sampleid-input" data-poolfield="sampleId" data-pi="' + i + '" value="' + escapeAttr(pc.sampleId) + '" placeholder="Sample ID">' +
+      '<div><span class="tag-pill cat-Pool-plasma">Pool plasma</span></div>' +
+      '<span class="classify-field-label">Batch</span>' +
+      '<select data-poolfield="batchId" data-pi="' + i + '">' + batchOptionsHtml(pc.batchId) + '</select>' +
+      '<span class="classify-field-label">Pairs with</span>' +
+      '<select data-poolfield="linkTo" data-pi="' + i + '">' + poolPartnerOptionsForPendingHtml(i, pc.linkTo) + '</select>' +
+      '<button class="link-btn danger" data-action="remove-pool-pending" data-pi="' + i + '">Remove</button>' +
+    '</div></th>';
+  }).join('');
+
+  const rowsHtml = state.referencePanel.rows.map(function (ref, rowIdx) {
+    const cellsHtml = poolPendingGrid.rawColumns.map(function (col) { return '<td>' + formatParsedValue(col[rowIdx]) + '</td>'; }).join('');
+    return '<tr><td class="classify-peptide-col">' + escapeHtml(ref.peptide || ref.peptideId || ('Row ' + (rowIdx + 1))) + '</td>' + cellsHtml + '</tr>';
+  }).join('');
+
+  document.getElementById('poolClassifyTable').innerHTML =
+    '<thead><tr><th class="classify-peptide-col">Peptide</th>' + headerCellsHtml + '</tr></thead><tbody>' + rowsHtml + '</tbody>';
+}
+
+/** Pairs are exclusive: pointing column i at a partner drops any other column
+ * that was pointing at the same partner, and un-points the partner if it was
+ * pointing back at i (which would otherwise be a two-column cycle). */
+function poolSetPair(index, value) {
+  poolPendingClassifications[index].linkTo = value;
+  if (!value) return;
+  poolPendingClassifications.forEach(function (other, j) {
+    if (j !== index && other.linkTo === value) other.linkTo = '';
+  });
+  if (value.indexOf('pending:') === 0) {
+    const target = poolPendingClassifications[Number(value.slice('pending:'.length))];
+    if (target && target.linkTo === 'pending:' + index) target.linkTo = '';
+  }
+}
+
+function handlePoolClassifyTableChange(e) {
+  const el = e.target;
+  const field = el.getAttribute('data-poolfield');
+  if (!field) return;
+  const i = Number(el.getAttribute('data-pi'));
+  const pc = poolPendingClassifications[i];
+  if (!pc) return;
+  if (field === 'batchId' && el.value === NEW_BATCH_OPTION) {
+    const name = prompt('New batch name:', batchNameFromRunHeader(pc.headerText));
+    const trimmed = name === null ? '' : name.trim();
+    if (trimmed) {
+      pc.batchId = addBatch(trimmed).id;
+      renderBatchChips();
+      renderRunsView();
+    }
+    renderPoolClassifyStep(); // also reverts the select if the prompt was cancelled
+    return;
+  }
+  if (field === 'linkTo') poolSetPair(i, el.value);
+  else pc[field] = el.value;
+  renderPoolClassifyStep();
+}
+
+function handlePoolClassifyTableClick(e) {
+  const btn = e.target.closest('button[data-action="remove-pool-pending"]');
+  if (!btn) return;
+  const removed = Number(btn.getAttribute('data-pi'));
+  poolPendingGrid.rawColumns.splice(removed, 1);
+  poolPendingGrid.columnCount--;
+  poolPendingClassifications.splice(removed, 1);
+  // Pending links are stored by index, so every link to a later column shifts
+  // down by one and any link to the removed column is gone.
+  poolPendingClassifications.forEach(function (pc) {
+    if (pc.linkTo.indexOf('pending:') !== 0) return;
+    const target = Number(pc.linkTo.slice('pending:'.length));
+    if (target === removed) pc.linkTo = '';
+    else if (target > removed) pc.linkTo = 'pending:' + (target - 1);
+  });
+  if (poolPendingGrid.columnCount === 0) { poolPendingGrid = null; poolPendingClassifications = []; }
+  renderPoolClassifyStep();
+}
+
+function handleCancelPoolClassify() {
+  poolPendingGrid = null;
+  poolPendingClassifications = [];
+  poolPendingAutoPairCount = 0;
+  poolPendingDroppedNote = '';
+  document.getElementById('poolPasteInput').value = '';
+  renderPoolClassifyStep();
+  updatePoolMismatchWarning();
+}
+
+function handleSavePoolClassified() {
+  for (let i = 0; i < poolPendingClassifications.length; i++) {
+    if (!poolPendingClassifications[i].sampleId.trim()) { alert('Column ' + (i + 1) + ' is missing a Sample ID.'); return; }
+  }
+
+  // Create every column first, then resolve the pairs — a "pending:N" link only
+  // becomes a real column id once both sides exist.
+  const createdIds = poolPendingClassifications.map(function (pc, i) {
+    const col = {
+      id: uid('col'), sampleId: pc.sampleId.trim(), category: 'Pool plasma', vip: false,
+      batchId: pc.batchId || '', linkedFirstRunColumnId: null,
+      values: poolPendingGrid.rawColumns[i], pastedAt: new Date().toISOString()
+    };
+    state.sampleColumns.push(col);
+    return col.id;
+  });
+  poolPendingClassifications.forEach(function (pc, i) {
+    if (!pc.linkTo) return;
+    const col = getColumn(createdIds[i]);
+    if (pc.linkTo.indexOf('saved:') === 0) col.linkedFirstRunColumnId = pc.linkTo.slice('saved:'.length);
+    else if (pc.linkTo.indexOf('pending:') === 0) col.linkedFirstRunColumnId = createdIds[Number(pc.linkTo.slice('pending:'.length))];
+  });
+
+  saveSampleColumns();
+  // Anything still unpaired but sharing a batch gets the same treatment as after
+  // a bulk batch assignment.
+  autoLinkPoolPlasma();
+
+  const savedCount = poolPendingClassifications.length;
+  const unassigned = poolPendingClassifications.filter(function (pc) { return !pc.batchId; }).length;
+  poolPendingGrid = null;
+  poolPendingClassifications = [];
+  poolPendingAutoPairCount = 0;
+  poolPendingDroppedNote = '';
+  document.getElementById('poolPasteInput').value = '';
+  renderPoolClassifyStep();
+  updatePoolMismatchWarning();
+
+  const msgEl = document.getElementById('poolPasteResultMsg');
+  msgEl.textContent = 'Saved ' + savedCount + ' pool plasma column(s).' +
+    (unassigned > 0 ? ' ' + unassigned + ' still need a batch — assign it in Section 4 below.' : ' Review the pairs in Section 4 below.');
   msgEl.classList.remove('hidden');
 
   renderRunsView();
@@ -1777,7 +2171,10 @@ function renderRunsView() {
 }
 
 function renderSampleColumnsTable() {
-  const cols = state.sampleColumns;
+  // Pool plasma columns are listed in their own table below (they're pasted
+  // separately in Section 3 and pair with each other, not with a First-run
+  // column), so listing them here too would just duplicate every row.
+  const cols = state.sampleColumns.filter(function (c) { return c.category !== 'Pool plasma'; });
   const allChecked = cols.length > 0 && cols.every(function (c) { return selectedSampleColumnIds.has(c.id); });
   const rowsHtml = cols.map(function (c) {
     const linked = c.linkedFirstRunColumnId ? getColumn(c.linkedFirstRunColumnId) : null;
@@ -1804,6 +2201,7 @@ function handleSampleColumnsTableChange(e) {
   const el = e.target;
   if (el.getAttribute('data-action') === 'select-all-samples') {
     state.sampleColumns.forEach(function (c) {
+      if (c.category === 'Pool plasma') return; // not listed in this table
       if (el.checked) selectedSampleColumnIds.add(c.id); else selectedSampleColumnIds.delete(c.id);
     });
     renderSampleColumnsTable();
@@ -1816,10 +2214,7 @@ function handleSampleColumnsTableChange(e) {
   }
 }
 
-function handleSampleColumnsTableClick(e) {
-  const btn = e.target.closest('button[data-action="delete-col"]');
-  if (!btn) return;
-  const id = btn.getAttribute('data-id');
+function deleteSampleColumn(id) {
   const dependents = state.sampleColumns.filter(function (c) { return c.linkedFirstRunColumnId === id; });
   if (dependents.length > 0) {
     const ok = confirm('This column is linked to by ' + dependents.length + ' other column(s) (Rerun/Duplicate/Pool plasma). Deleting it will leave those unlinked. Continue?');
@@ -1831,6 +2226,12 @@ function handleSampleColumnsTableClick(e) {
   selectedSampleColumnIds.delete(id);
   renderRunsView();
   renderSummary();
+}
+
+function handleSampleColumnsTableClick(e) {
+  const btn = e.target.closest('button[data-action="delete-col"]');
+  if (!btn) return;
+  deleteSampleColumn(btn.getAttribute('data-id'));
 }
 
 function handleBulkAssignBatch() {
@@ -1889,23 +2290,47 @@ function poolPartnerOptionsHtml(colId, selectedId) {
 
 function renderPoolColumnsTable() {
   const cols = state.sampleColumns.filter(function (c) { return c.category === 'Pool plasma'; });
+  // A pair is stored on one side only, so read it both ways — the column being
+  // pointed AT is just as paired as the one doing the pointing, and offering it
+  // a partner dropdown would let a third column join a finished pair.
+  const partnerOf = {};
+  cols.forEach(function (c) {
+    if (!c.linkedFirstRunColumnId) return;
+    partnerOf[c.id] = c.linkedFirstRunColumnId;
+    partnerOf[c.linkedFirstRunColumnId] = c.id;
+  });
   const rowsHtml = cols.map(function (c) {
-    const linked = c.linkedFirstRunColumnId ? getColumn(c.linkedFirstRunColumnId) : null;
+    const linked = partnerOf[c.id] ? getColumn(partnerOf[c.id]) : null;
+    // Unlink always clears the side that holds the link.
+    const linkHolderId = c.linkedFirstRunColumnId ? c.id : partnerOf[c.id];
     const linkedCell = linked
-      ? escapeHtml(linked.sampleId)
+      ? escapeHtml(linked.sampleId) + ' <button data-action="unlink-pool" data-id="' + linkHolderId + '" class="link-btn">Unlink</button>'
       : '<select data-action="pool-link" data-id="' + c.id + '">' + poolPartnerOptionsHtml(c.id, '') + '</select>';
     return '<tr>' +
       '<td><input type="checkbox" data-action="select-col" data-id="' + c.id + '"' + (selectedSampleColumnIds.has(c.id) ? ' checked' : '') + '></td>' +
       '<td>' + escapeHtml(c.sampleId) + '</td>' +
       '<td><span class="tag-pill cat-Pool-plasma">Pool plasma</span></td>' +
-      '<td>' + (c.vip ? 'Yes' : 'No') + '</td>' +
       '<td>' + escapeHtml(batchName(c.batchId)) + '</td>' +
       '<td>' + linkedCell + '</td>' +
+      '<td><button data-action="delete-col" data-id="' + c.id + '" class="link-btn danger">Delete</button></td>' +
     '</tr>';
   }).join('');
   document.getElementById('poolColumnsTable').innerHTML =
-    '<thead><tr><th></th><th>Sample ID</th><th>Category</th><th>VIP</th><th>Batch</th><th>Linked to</th></tr></thead><tbody>' +
-    (rowsHtml || '<tr><td colspan="6" class="hint">No Pool plasma columns yet.</td></tr>') + '</tbody>';
+    '<thead><tr><th></th><th>Sample ID</th><th>Category</th><th>Batch</th><th>Paired with</th><th></th></tr></thead><tbody>' +
+    (rowsHtml || '<tr><td colspan="6" class="hint">No Pool plasma columns yet — paste them in Section 3 above.</td></tr>') + '</tbody>';
+}
+
+function handlePoolColumnsTableClick(e) {
+  const deleteBtn = e.target.closest('button[data-action="delete-col"]');
+  if (deleteBtn) { deleteSampleColumn(deleteBtn.getAttribute('data-id')); return; }
+  const unlinkBtn = e.target.closest('button[data-action="unlink-pool"]');
+  if (!unlinkBtn) return;
+  const col = getColumn(unlinkBtn.getAttribute('data-id'));
+  if (!col) return;
+  col.linkedFirstRunColumnId = null;
+  saveSampleColumns();
+  renderRunsView();
+  renderSummary();
 }
 
 function handlePoolColumnsTableChange(e) {
@@ -2376,6 +2801,14 @@ function wireStaticHandlers() {
     if (e.key === 'Escape') { e.preventDefault(); handleInlineNewBatchCancel(); }
   });
   document.getElementById('poolColumnsTable').addEventListener('change', handlePoolColumnsTableChange);
+  document.getElementById('poolColumnsTable').addEventListener('click', handlePoolColumnsTableClick);
+
+  document.getElementById('poolPasteInput').addEventListener('input', updatePoolMismatchWarning);
+  document.getElementById('parsePoolGridBtn').addEventListener('click', handleParsePoolGrid);
+  document.getElementById('poolClassifyTable').addEventListener('change', handlePoolClassifyTableChange);
+  document.getElementById('poolClassifyTable').addEventListener('click', handlePoolClassifyTableClick);
+  document.getElementById('savePoolClassifiedBtn').addEventListener('click', handleSavePoolClassified);
+  document.getElementById('cancelPoolClassifyBtn').addEventListener('click', handleCancelPoolClassify);
 
   document.getElementById('summarySideNav').addEventListener('click', function (e) {
     const link = e.target.closest('.side-nav-link');
