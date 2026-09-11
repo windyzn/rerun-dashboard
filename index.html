@@ -184,6 +184,8 @@
   .classify-toolbar{ justify-content:space-between; margin-bottom:10px; }
   .classify-toolbar-bulk{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
   .classify-toolbar-bulk label{ font-size:12px; font-weight:700; color:var(--muted); }
+  .inline-new-batch{ display:flex; align-items:center; gap:6px; }
+  .inline-new-batch input{ max-width:220px; }
   .bulk-vip-check{ display:flex; align-items:center; gap:4px; }
   .classify-grid-scroll{ border-radius:12px; border:1px solid var(--border); overflow:auto; max-height:560px; }
   .classify-grid{ border-collapse:collapse; min-width:100%; }
@@ -405,6 +407,11 @@
         <span class="classify-toolbar-bulk">
           <label for="bulkAssignBatchSelect">Assign batch to selected:</label>
           <select id="bulkAssignBatchSelect"></select>
+          <span id="inlineNewBatchWrap" class="inline-new-batch hidden">
+            <input type="text" id="inlineNewBatchInput" placeholder="New batch name, e.g. July 2026 3A">
+            <button id="inlineNewBatchAddBtn" class="secondary">Create</button>
+            <button id="inlineNewBatchCancelBtn" class="link-btn">Cancel</button>
+          </span>
           <button id="bulkAssignBatchApplyBtn" class="secondary">Apply to selected</button>
         </span>
       </div>
@@ -1301,8 +1308,7 @@ function handleAddBatch() {
   const input = document.getElementById('newBatchNameInput');
   const name = input.value.trim();
   if (!name) { alert('Batch name is required.'); return; }
-  state.batches.push({ id: uid('batch'), name: name, createdAt: new Date().toISOString() });
-  saveBatches();
+  addBatch(name);
   input.value = '';
   renderBatchChips();
   renderRunsView();
@@ -1342,10 +1348,51 @@ function refreshAllBatchDependentViews() {
   renderRunsView();
   renderSummary();
 }
+/** Sentinel value for the "+ New batch…" entry at the bottom of the
+ * batch-assign dropdown, so a batch can be created without scrolling back up
+ * to Section 1. Picking it swaps the dropdown for a small name field; creating
+ * selects the new batch straight away, ready for "Apply to selected". */
+const NEW_BATCH_OPTION = '__new__';
+
 function batchOptionsHtml(selectedId) {
   return '<option value="">— choose —</option>' + state.batches.map(function (b) {
     return '<option value="' + b.id + '"' + (b.id === selectedId ? ' selected' : '') + '>' + escapeHtml(b.name) + '</option>';
-  }).join('');
+  }).join('') + '<option value="' + NEW_BATCH_OPTION + '">+ New batch\u2026</option>';
+}
+
+function addBatch(name) {
+  const batch = { id: uid('batch'), name: name, createdAt: new Date().toISOString() };
+  state.batches.push(batch);
+  saveBatches();
+  return batch;
+}
+
+function showInlineNewBatch(show) {
+  document.getElementById('inlineNewBatchWrap').classList.toggle('hidden', !show);
+  document.getElementById('bulkAssignBatchSelect').classList.toggle('hidden', show);
+  const input = document.getElementById('inlineNewBatchInput');
+  input.value = '';
+  if (show) input.focus();
+}
+
+function handleBulkAssignBatchSelectChange() {
+  if (document.getElementById('bulkAssignBatchSelect').value === NEW_BATCH_OPTION) showInlineNewBatch(true);
+}
+
+function handleInlineNewBatchAdd() {
+  const input = document.getElementById('inlineNewBatchInput');
+  const name = input.value.trim();
+  if (!name) { alert('Batch name is required.'); return; }
+  const batch = addBatch(name);
+  showInlineNewBatch(false);
+  renderBatchChips();
+  renderRunsView();
+  document.getElementById('bulkAssignBatchSelect').value = batch.id;
+}
+
+function handleInlineNewBatchCancel() {
+  showInlineNewBatch(false);
+  document.getElementById('bulkAssignBatchSelect').value = '';
 }
 
 // ---------------------------------------------------------------------
@@ -1748,7 +1795,9 @@ function renderSampleColumnsTable() {
     '<thead><tr><th><input type="checkbox" data-action="select-all-samples"' + (allChecked ? ' checked' : '') + '></th>' +
     '<th>Sample ID</th><th>Category</th><th>VIP</th><th>Batch</th><th>Linked to</th><th></th></tr></thead><tbody>' +
     (rowsHtml || '<tr><td colspan="7" class="hint">No sample columns pasted yet.</td></tr>') + '</tbody>';
-  document.getElementById('bulkAssignBatchSelect').innerHTML = batchOptionsHtml('');
+  const bulkBatchSelect = document.getElementById('bulkAssignBatchSelect');
+  const keepSelection = bulkBatchSelect.value === NEW_BATCH_OPTION ? '' : bulkBatchSelect.value;
+  bulkBatchSelect.innerHTML = batchOptionsHtml(keepSelection);
 }
 
 function handleSampleColumnsTableChange(e) {
@@ -1786,7 +1835,7 @@ function handleSampleColumnsTableClick(e) {
 
 function handleBulkAssignBatch() {
   const batchId = document.getElementById('bulkAssignBatchSelect').value;
-  if (!batchId) { alert('Choose a batch first.'); return; }
+  if (!batchId || batchId === NEW_BATCH_OPTION) { alert('Choose a batch first.'); return; }
   if (selectedSampleColumnIds.size === 0) { alert('Select at least one sample column first.'); return; }
   selectedSampleColumnIds.forEach(function (id) {
     const c = getColumn(id);
@@ -2319,6 +2368,13 @@ function wireStaticHandlers() {
   document.getElementById('sampleColumnsTable').addEventListener('click', handleSampleColumnsTableClick);
   document.getElementById('sampleColumnsTable').addEventListener('change', handleSampleColumnsTableChange);
   document.getElementById('bulkAssignBatchApplyBtn').addEventListener('click', handleBulkAssignBatch);
+  document.getElementById('bulkAssignBatchSelect').addEventListener('change', handleBulkAssignBatchSelectChange);
+  document.getElementById('inlineNewBatchAddBtn').addEventListener('click', handleInlineNewBatchAdd);
+  document.getElementById('inlineNewBatchCancelBtn').addEventListener('click', handleInlineNewBatchCancel);
+  document.getElementById('inlineNewBatchInput').addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') { e.preventDefault(); handleInlineNewBatchAdd(); }
+    if (e.key === 'Escape') { e.preventDefault(); handleInlineNewBatchCancel(); }
+  });
   document.getElementById('poolColumnsTable').addEventListener('change', handlePoolColumnsTableChange);
 
   document.getElementById('summarySideNav').addEventListener('click', function (e) {
