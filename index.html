@@ -142,10 +142,6 @@
   .tag-pill.cat-Rerun{ background:#E8EEFC; color:#2A4D9E; }
   .tag-pill.cat-Duplicate{ background:#FBF1E0; color:#8A5A00; }
   .tag-pill.cat-Pool-plasma{ background:#F0EAFC; color:#6B3FA0; }
-  /* In the Step 2 classify grid header specifically, First-run gets a solid-navy
-     pill (it's the "anchor" category being classified against) rather than the
-     pale tint used everywhere else First-run appears. */
-  .classify-col-header .tag-pill.cat-First-run{ background:#18374B; color:#fff; }
   .info-dot{ color:var(--warn-text); cursor:help; font-size:12px; }
   .warning{ background:var(--warn-bg); border:1px solid #f0c36d; color:var(--warn-text); padding:8px 10px; border-radius:8px; font-size:13px; margin:8px 0; }
   .form-grid{ display:grid; grid-template-columns:1fr 1fr; gap:14px; max-width:700px; }
@@ -186,7 +182,7 @@
   .classify-toolbar-bulk label{ font-size:12px; font-weight:700; color:var(--muted); }
   .inline-new-batch{ display:flex; align-items:center; gap:6px; }
   .inline-new-batch input{ max-width:220px; }
-  .bulk-vip-check{ display:flex; align-items:center; gap:4px; }
+  .classify-vip-check{ display:flex; align-items:center; gap:4px; font-size:11px; font-weight:700; color:var(--muted); }
   .classify-grid-scroll{ border-radius:12px; border:1px solid var(--border); overflow:auto; max-height:560px; }
   .classify-grid{ border-collapse:collapse; min-width:100%; }
   .classify-grid th, .classify-grid td{ padding:12px; font-size:13px; border-bottom:1px solid var(--border-table); white-space:nowrap; }
@@ -201,6 +197,8 @@
   .classify-select-row{ display:flex; align-items:center; gap:6px; }
   .classify-sampleid-input{ flex:1; min-width:0; font-weight:700; }
   .classify-col-caption{ font-size:11px; color:var(--muted-2); }
+  .classify-category-row{ display:flex; align-items:center; gap:8px; }
+  .classify-category-row select{ flex:1; min-width:0; }
   .classify-col-runheader{ font-size:10.5px; font-weight:700; color:var(--muted-2); text-transform:uppercase; letter-spacing:0.04em; white-space:normal; max-width:190px; }
   .classify-field-label{ font-size:10.5px; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:0.04em; }
   .pool-dropped-note{ font-size:12.5px; color:var(--muted); margin:8px 0 0; }
@@ -383,12 +381,6 @@
         <p id="autoDetectNote" class="hint hidden" style="color:var(--pass-text);"></p>
         <div class="row classify-toolbar">
           <span class="hint" id="classifyColumnCount"></span>
-          <span class="classify-toolbar-bulk">
-            <label for="bulkCategorySelect">Bulk-classify selected:</label>
-            <select id="bulkCategorySelect"></select>
-            <label class="bulk-vip-check"><input type="checkbox" id="bulkVipCheckbox"> VIP</label>
-            <button id="bulkClassifyApplyBtn" class="secondary">Apply to selected</button>
-          </span>
         </div>
         <div class="classify-grid-scroll">
           <table class="classify-grid" id="classifyTable"></table>
@@ -558,7 +550,6 @@ const uiState = { expanded: new Set(), drilldown: {} };
 let pendingGrid = null;           // { columnCount, rawColumns: ParsedValue[][] }
 let pendingClassifications = [];  // [{ sampleId, category, vip, linkedFirstRunColumnId }] — batch is assigned later, in Section 4
 let pendingAutoDetectCount = 0;   // how many pendingClassifications rows autoDetectDuplicates() just set
-const pendingSelectedIndices = new Set();  // checked columns in the Section 2 classify grid, for bulk-classify
 
 // Section 3's pool plasma paste is its own pending buffer, parallel to the one
 // above: same grid shape, but every column is a Pool plasma column, so there's
@@ -919,7 +910,6 @@ function handleStartNewAnalysis() {
   pendingGrid = null;
   pendingClassifications = [];
   pendingAutoDetectCount = 0;
-  pendingSelectedIndices.clear();
   selectedSampleColumnIds.clear();
   renderClassifyStep();
   renderPasteView();
@@ -958,7 +948,6 @@ function applyAnalysisSnapshot(snapshot) {
   pendingGrid = null;
   pendingClassifications = [];
   pendingAutoDetectCount = 0;
-  pendingSelectedIndices.clear();
   selectedSampleColumnIds.clear();
   renderClassifyStep();
   renderReferencePanelView();
@@ -1610,7 +1599,6 @@ function handleParseGrid() {
 
   pendingGrid = { columnCount: block.columnCount, rawColumns: block.rawColumns, labelRow: block.row2 };
   pendingClassifications = [];
-  pendingSelectedIndices.clear();
   for (let c = 0; c < block.columnCount; c++) {
     pendingClassifications.push({
       sampleId: headerCellText(block.row1, c), category: 'First-run', vip: false, linkedFirstRunColumnId: ''
@@ -1722,6 +1710,17 @@ function firstRunOptionsHtml(excludeIndex, selectedValue) {
  * per-column control — Sample ID (auto-filled from the barcode row, but often
  * wrong/missing) and the Rerun/Duplicate link are the two things that
  * routinely need a one-off fix, so those stay directly editable per column. */
+/* Category choices for one classify column. 'Pool plasma' is deliberately left
+ * out — pool columns are pasted in Section 3 instead, where the run-header/label
+ * rows and replicate pairing are read the way the sheet actually lays them out. */
+function categoryOptionsHtml(selected) {
+  return Calc.CATEGORY_VOCABULARY.filter(function (cat) {
+    return cat !== 'Pool plasma';
+  }).map(function (cat) {
+    return '<option value="' + cat + '"' + (cat === selected ? ' selected' : '') + '>' + cat + '</option>';
+  }).join('');
+}
+
 function renderClassifyStep() {
   const stepEl = document.getElementById('classifyStep');
   if (!pendingGrid) { stepEl.classList.add('hidden'); return; }
@@ -1729,16 +1728,6 @@ function renderClassifyStep() {
 
   document.getElementById('classifyColumnCount').textContent =
     pendingGrid.columnCount + ' column(s) pasted' + (pendingGrid.columnCount > 4 ? ' · scroll to review all' : '');
-  // 'Pool plasma' is deliberately left out here — pool columns are pasted in
-  // Section 3 instead, where the run-header/label rows and replicate pairing are
-  // read the way the sheet actually lays them out.
-  document.getElementById('bulkCategorySelect').innerHTML =
-    '<option value="">Category…</option>' + Calc.CATEGORY_VOCABULARY.filter(function (cat) {
-      return cat !== 'Pool plasma';
-    }).map(function (cat) {
-      return '<option value="' + cat + '">' + cat + '</option>';
-    }).join('');
-
   const noteEl = document.getElementById('autoDetectNote');
   if (pendingAutoDetectCount > 0) {
     noteEl.innerHTML = icon('check') + ' Auto-detected ' + pendingAutoDetectCount + ' column(s) as Duplicate from a "D" prefix, linked to their matching column — review before saving.';
@@ -1751,10 +1740,12 @@ function renderClassifyStep() {
     const needsLink = pc.category === 'Rerun' || pc.category === 'Duplicate';
     return '<th><div class="classify-col-header">' +
       '<div class="classify-select-row">' +
-        '<input type="checkbox" data-action="select-pending" data-pi="' + i + '"' + (pendingSelectedIndices.has(i) ? ' checked' : '') + '>' +
         '<input type="text" class="classify-sampleid-input" data-pfield="sampleId" data-pi="' + i + '" value="' + escapeAttr(pc.sampleId) + '" placeholder="Sample ID">' +
       '</div>' +
-      '<div><span class="tag-pill cat-' + pc.category.replace(' ', '-') + '">' + pc.category + '</span>' + vipBadge(pc.vip) + '</div>' +
+      '<div class="classify-category-row">' +
+        '<select data-pfield="category" data-pi="' + i + '">' + categoryOptionsHtml(pc.category) + '</select>' +
+        '<label class="classify-vip-check"><input type="checkbox" data-action="toggle-pending-vip" data-pi="' + i + '"' + (pc.vip ? ' checked' : '') + '> VIP</label>' +
+      '</div>' +
       (needsLink ? '<select class="classify-col-caption" data-pfield="linkedFirstRunColumnId" data-pi="' + i + '">' + firstRunOptionsHtml(i, pc.linkedFirstRunColumnId) + '</select>' : '') +
       '<button class="link-btn danger" data-action="remove-pending" data-pi="' + i + '">Remove</button>' +
     '</div></th>';
@@ -1771,9 +1762,9 @@ function renderClassifyStep() {
 
 function handleClassifyTableChange(e) {
   const el = e.target;
-  if (el.getAttribute('data-action') === 'select-pending') {
-    const i = Number(el.getAttribute('data-pi'));
-    if (el.checked) pendingSelectedIndices.add(i); else pendingSelectedIndices.delete(i);
+  if (el.getAttribute('data-action') === 'toggle-pending-vip') {
+    const vipIdx = Number(el.getAttribute('data-pi'));
+    if (pendingClassifications[vipIdx]) pendingClassifications[vipIdx].vip = el.checked;
     return;
   }
   const field = el.getAttribute('data-pfield');
@@ -1782,6 +1773,8 @@ function handleClassifyTableChange(e) {
   const pc = pendingClassifications[i];
   if (!pc) return;
   pc[field] = el.value;
+  // Switching away from Rerun/Duplicate clears a now-irrelevant link.
+  if (field === 'category' && el.value !== 'Rerun' && el.value !== 'Duplicate') pc.linkedFirstRunColumnId = '';
   renderClassifyStep();
 }
 
@@ -1792,29 +1785,7 @@ function handleClassifyTableClick(e) {
   pendingGrid.rawColumns.splice(i, 1);
   pendingGrid.columnCount--;
   pendingClassifications.splice(i, 1);
-  pendingSelectedIndices.clear(); // indices shifted; simplest to just ask the user to reselect
   if (pendingGrid.columnCount === 0) { pendingGrid = null; pendingClassifications = []; }
-  renderClassifyStep();
-}
-
-function handleBulkClassifyApply() {
-  const category = document.getElementById('bulkCategorySelect').value;
-  const setVip = document.getElementById('bulkVipCheckbox').checked;
-  if (pendingSelectedIndices.size === 0) { alert('Select at least one column first.'); return; }
-  if (!category && !setVip) { alert('Choose a category or check VIP first.'); return; }
-  pendingSelectedIndices.forEach(function (i) {
-    const pc = pendingClassifications[i];
-    if (!pc) return;
-    if (category) {
-      pc.category = category;
-      // Switching away from Rerun/Duplicate clears a now-irrelevant link.
-      if (category !== 'Rerun' && category !== 'Duplicate') pc.linkedFirstRunColumnId = '';
-    }
-    if (setVip) pc.vip = true;
-  });
-  document.getElementById('bulkCategorySelect').value = '';
-  document.getElementById('bulkVipCheckbox').checked = false;
-  pendingSelectedIndices.clear(); // don't silently re-apply to the same columns next time
   renderClassifyStep();
 }
 
@@ -1822,7 +1793,6 @@ function handleCancelClassify() {
   pendingGrid = null;
   pendingClassifications = [];
   pendingAutoDetectCount = 0;
-  pendingSelectedIndices.clear();
   document.getElementById('gridPasteInput').value = '';
   renderClassifyStep();
   updateGridMismatchWarning();
@@ -1871,7 +1841,6 @@ function handleSaveClassified() {
   pendingGrid = null;
   pendingClassifications = [];
   pendingAutoDetectCount = 0;
-  pendingSelectedIndices.clear();
   document.getElementById('gridPasteInput').value = '';
   renderClassifyStep();
   updateGridMismatchWarning();
@@ -2837,7 +2806,6 @@ function wireStaticHandlers() {
   document.getElementById('parseGridBtn').addEventListener('click', handleParseGrid);
   document.getElementById('classifyTable').addEventListener('change', handleClassifyTableChange);
   document.getElementById('classifyTable').addEventListener('click', handleClassifyTableClick);
-  document.getElementById('bulkClassifyApplyBtn').addEventListener('click', handleBulkClassifyApply);
   document.getElementById('saveClassifiedBtn').addEventListener('click', handleSaveClassified);
   document.getElementById('cancelClassifyBtn').addEventListener('click', handleCancelClassify);
 
