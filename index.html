@@ -75,6 +75,8 @@
   #parseRefPanelBtn:active, #parseGridBtn:active, #saveClassifiedBtn:active, .btn:active{ transform:translateY(1px); }
   .secondary{ padding:8px 16px; border-radius:7px; border:1px solid var(--border); background:#fff; color:var(--text); cursor:pointer; font-size:13px; font-weight:600; transition:border-color .15s ease, background .15s ease; }
   .secondary:hover{ border-color:var(--accent); background:var(--accent-soft); }
+  .secondary.danger{ color:var(--fail-text); border-color:#e7bcb6; }
+  .secondary.danger:hover{ border-color:var(--fail-text); background:var(--fail-bg); }
   .link-btn{ background:none; border:none; color:var(--accent); cursor:pointer; font-size:13px; padding:4px 0; font-weight:600; }
   .link-btn:hover{ text-decoration:underline; }
   .link-btn.danger{ color:var(--fail-text); }
@@ -431,6 +433,7 @@
             <button id="inlineNewBatchCancelBtn" class="link-btn">Cancel</button>
           </span>
           <button id="bulkAssignBatchApplyBtn" class="secondary">Apply to selected</button>
+          <button id="bulkDeleteColumnsBtn" class="secondary danger">Delete selected</button>
         </span>
       </div>
       <table id="sampleColumnsTable"></table>
@@ -2254,6 +2257,30 @@ function handleSampleColumnsTableClick(e) {
   deleteSampleColumn(btn.getAttribute('data-id'));
 }
 
+/* Deletes every checked column in one go — both tables share
+ * selectedSampleColumnIds, so a pool row checked below is included too. Links
+ * pointing at a deleted column are cleared rather than left dangling. */
+function handleBulkDeleteColumns() {
+  const ids = Array.from(selectedSampleColumnIds).filter(function (id) { return !!getColumn(id); });
+  if (ids.length === 0) { alert('Select at least one column first.'); return; }
+  const doomed = {};
+  ids.forEach(function (id) { doomed[id] = true; });
+  // Warn only about survivors that lose a link — links between two deleted
+  // columns (e.g. a whole pool pair) disappear together and need no warning.
+  const orphaned = state.sampleColumns.filter(function (c) {
+    return !doomed[c.id] && c.linkedFirstRunColumnId && doomed[c.linkedFirstRunColumnId];
+  }).length;
+  const msg = 'Delete ' + ids.length + ' selected column(s)?' +
+    (orphaned > 0 ? ' This will also leave ' + orphaned + ' other column(s) unlinked.' : '');
+  if (!confirm(msg)) return;
+  state.sampleColumns = state.sampleColumns.filter(function (c) { return !doomed[c.id]; });
+  state.sampleColumns.forEach(function (c) { if (doomed[c.linkedFirstRunColumnId]) c.linkedFirstRunColumnId = null; });
+  saveSampleColumns();
+  selectedSampleColumnIds.clear();
+  renderRunsView();
+  renderSummary();
+}
+
 function handleBulkAssignBatch() {
   const batchId = document.getElementById('bulkAssignBatchSelect').value;
   if (!batchId || batchId === NEW_BATCH_OPTION) { alert('Choose a batch first.'); return; }
@@ -2310,6 +2337,7 @@ function poolPartnerOptionsHtml(colId, selectedId) {
 
 function renderPoolColumnsTable() {
   const cols = state.sampleColumns.filter(function (c) { return c.category === 'Pool plasma'; });
+  const allChecked = cols.length > 0 && cols.every(function (c) { return selectedSampleColumnIds.has(c.id); });
   // A pair is stored on one side only, so read it both ways — the column being
   // pointed AT is just as paired as the one doing the pointing, and offering it
   // a partner dropdown would let a third column join a finished pair.
@@ -2336,7 +2364,8 @@ function renderPoolColumnsTable() {
     '</tr>';
   }).join('');
   document.getElementById('poolColumnsTable').innerHTML =
-    '<thead><tr><th></th><th>Sample ID</th><th>Category</th><th>Batch</th><th>Paired with</th><th></th></tr></thead><tbody>' +
+    '<thead><tr><th><input type="checkbox" data-action="select-all-pool"' + (allChecked ? ' checked' : '') + '></th>' +
+    '<th>Sample ID</th><th>Category</th><th>Batch</th><th>Paired with</th><th></th></tr></thead><tbody>' +
     (rowsHtml || '<tr><td colspan="6" class="hint">No Pool plasma columns yet — paste them in Section 3 above.</td></tr>') + '</tbody>';
 }
 
@@ -2355,6 +2384,15 @@ function handlePoolColumnsTableClick(e) {
 
 function handlePoolColumnsTableChange(e) {
   const el = e.target;
+  if (el.getAttribute('data-action') === 'select-all-pool') {
+    state.sampleColumns.forEach(function (c) {
+      if (c.category !== 'Pool plasma') return; // not listed in this table
+      if (el.checked) selectedSampleColumnIds.add(c.id); else selectedSampleColumnIds.delete(c.id);
+    });
+    renderSampleColumnsTable();
+    renderPoolColumnsTable();
+    return;
+  }
   if (el.getAttribute('data-action') === 'select-col') {
     const id = el.getAttribute('data-id');
     if (el.checked) selectedSampleColumnIds.add(id); else selectedSampleColumnIds.delete(id);
@@ -2812,6 +2850,7 @@ function wireStaticHandlers() {
   document.getElementById('sampleColumnsTable').addEventListener('click', handleSampleColumnsTableClick);
   document.getElementById('sampleColumnsTable').addEventListener('change', handleSampleColumnsTableChange);
   document.getElementById('bulkAssignBatchApplyBtn').addEventListener('click', handleBulkAssignBatch);
+  document.getElementById('bulkDeleteColumnsBtn').addEventListener('click', handleBulkDeleteColumns);
   document.getElementById('bulkAssignBatchSelect').addEventListener('change', handleBulkAssignBatchSelectChange);
   document.getElementById('inlineNewBatchAddBtn').addEventListener('click', handleInlineNewBatchAdd);
   document.getElementById('inlineNewBatchCancelBtn').addEventListener('click', handleInlineNewBatchCancel);
