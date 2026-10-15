@@ -137,6 +137,116 @@
   }
 
   // ---------------------------------------------------------------------
+  // 1b. Replicate agreement + reviewer overrides (UNI-776)
+  // ---------------------------------------------------------------------
+
+  // The vendor's value vocabulary: a concentration, "BLQ < x", or "NR". Empty
+  // cells and Excel error strings are missing data, not a reported result, so
+  // they never count toward agreement or mismatch.
+  const REPORTED_KINDS = ['numeric', 'blq', 'nr'];
+
+  /**
+   * How a set of values being compared agree with each other:
+   *   'numeric'   — every reported value is a concentration (CV% decides)
+   *   'agree-blq' — every reported value is BLQ  -> automatic pass
+   *   'agree-nr'  — every reported value is NR   -> automatic pass
+   *   'mismatch'  — mixed (BLQ vs value, NR vs value, BLQ vs NR) -> needs review
+   *   'insufficient' — only one reported value, nothing to compare it with
+   *   'missing'   — nothing reported at all      -> not evaluated
+   * @param {ParsedValue[]} parsedValues
+   * @returns {'numeric'|'agree-blq'|'agree-nr'|'mismatch'|'insufficient'|'missing'}
+   */
+  function replicateAgreement(parsedValues) {
+    const reported = (parsedValues || []).filter(function (p) { return p && REPORTED_KINDS.indexOf(p.kind) !== -1; });
+    if (reported.length === 0) return 'missing';
+    if (reported.length < 2) return 'insufficient';
+    const kinds = REPORTED_KINDS.filter(function (k) { return hasKind(reported, k); });
+    if (kinds.length > 1) return 'mismatch';
+    if (kinds[0] === 'blq') return 'agree-blq';
+    if (kinds[0] === 'nr') return 'agree-nr';
+    return 'numeric';
+  }
+
+  /**
+   * Automatic per-peptide status for one check (intra-CV, inter-CV, ...):
+   * agreeing BLQ/NR passes, a mismatch needs review, and a numeric comparison is
+   * decided by its CV% (or not evaluated when CV can't be computed, e.g. n<2).
+   * @param {string} agreement - from replicateAgreement()
+   * @param {number|null} cv
+   * @param {number} failPercent
+   * @returns {'pass'|'fail'|'needs-review'|'not-evaluated'}
+   */
+  function autoCheckStatus(agreement, cv, failPercent) {
+    if (agreement === 'agree-blq' || agreement === 'agree-nr') return 'pass';
+    if (agreement === 'mismatch') return 'needs-review';
+    if (agreement === 'numeric' && cv != null) return cv > failPercent ? 'fail' : 'pass';
+    return 'not-evaluated';
+  }
+
+  /**
+   * Stable key for a reference-panel row, used to store a reviewer override
+   * against the peptide it was made on.
+   * @param {{peptideId?:string, peptide?:string}} row
+   * @returns {string}
+   */
+  function overrideKey(row) {
+    return (row.peptideId || '') + '|' + (row.peptide || '');
+  }
+
+  /**
+   * Applies a reviewer override on top of an automatic status. Only a
+   * "needs review" status can be overridden — automatic passes/fails stand, and
+   * an override left over from data that has since changed (so the row no
+   * longer needs review) is ignored rather than silently applied.
+   * @param {string} autoStatus
+   * @param {('PASS'|'FAIL'|null|undefined)} override
+   * @returns {{status:string, override:('PASS'|'FAIL'|null)}}
+   */
+  function applyOverride(autoStatus, override) {
+    if (autoStatus !== 'needs-review' || (override !== 'PASS' && override !== 'FAIL')) {
+      return { status: autoStatus, override: null };
+    }
+    return { status: override === 'PASS' ? 'pass' : 'fail', override: override };
+  }
+
+  /**
+   * Pass/fail/review counts over a set of effective per-peptide statuses.
+   * `total` is every evaluated peptide — agreeing BLQ/NR pairs included.
+   * @param {{status:string, override:(string|null)}[]} checks
+   */
+  function statusCounts(checks) {
+    const c = { total: 0, passCount: 0, failCount: 0, needsReviewCount: 0, overriddenCount: 0, overriddenPassCount: 0, overriddenFailCount: 0 };
+    checks.forEach(function (ch) {
+      if (ch.status === 'not-evaluated') return;
+      c.total++;
+      if (ch.status === 'pass') c.passCount++;
+      else if (ch.status === 'fail') c.failCount++;
+      else if (ch.status === 'needs-review') c.needsReviewCount++;
+      if (ch.override) {
+        c.overriddenCount++;
+        if (ch.override === 'PASS') c.overriddenPassCount++; else c.overriddenFailCount++;
+      }
+    });
+    return c;
+  }
+
+  /**
+   * Overall verdict from failing-peptide count vs the ">N peptides" cutoff.
+   * Unreviewed mismatches only hold the verdict at NEEDS_REVIEW when they could
+   * actually change it — if it already fails, or would pass even if every
+   * pending item failed, the verdict is decided and review is optional.
+   * @param {number} failCount
+   * @param {number} needsReviewCount
+   * @param {number} failPeptideThreshold
+   * @returns {'PASS'|'FAIL'|'NEEDS_REVIEW'}
+   */
+  function resolveVerdict(failCount, needsReviewCount, failPeptideThreshold) {
+    if (failCount > failPeptideThreshold) return 'FAIL';
+    if (failCount + (needsReviewCount || 0) > failPeptideThreshold) return 'NEEDS_REVIEW';
+    return 'PASS';
+  }
+
+  // ---------------------------------------------------------------------
   // 2. Shared primitives
   // ---------------------------------------------------------------------
 
@@ -304,46 +414,49 @@
   /**
    * Duplicate / VIP analysis (simplest, no inter-run comparison, no ratio).
    * @param {DuplicateRowInput[]} rows
+   * @param {Record<string, ('PASS'|'FAIL')>} [overrides] - reviewer decisions keyed by overrideKey(row)
    * @returns {Object} BatchResult
    */
-  function duplicateAnalysis(rows) {
+  function duplicateAnalysis(rows, overrides) {
+    overrides = overrides || {};
     const perPeptide = (rows || []).map(function (row) {
       const numeric = numericValues(row.replicates);
       const validCount = numeric.length;
       const intraCv = validCount >= 2 ? cvPercent(numeric) : null;
-      // All-BLQ or all-NR replicates agree with each other — that's a clean
-      // result (consistently below the detection limit / not reported), not
-      // a discrepancy, so it shouldn't be treated the same as a real
-      // mismatch (e.g. one BLQ + one numeric).
-      const excluded = validCount === 0 && !isConsistentNonNumericAgreement(row.replicates);
-      // Xukun's rule: some replicates BLQ and others carrying a real
-      // concentration is a fail on its own — independent of (and in addition
-      // to) the CV% check, since a CV can't even be computed from just one
-      // numeric replicate.
-      const blqMismatch = hasBlqNumericMismatch(row.replicates);
+      // Xukun's rule (Oct 2026 demo): all-BLQ or all-NR replicates agree, so
+      // they pass and count toward the totals. Mixed replicates (BLQ vs value,
+      // NR vs value, BLQ vs NR) are neither passed nor failed automatically —
+      // they need a reviewer's decision.
+      const agreement = replicateAgreement(row.replicates);
+      const autoStatus = autoCheckStatus(agreement, intraCv, THRESHOLDS.duplicateCvFailPercent);
+      const key = overrideKey(row);
+      const resolved = applyOverride(autoStatus, overrides[key]);
       return {
         protein: row.protein, mycoId: row.mycoId, peptideId: row.peptideId,
         peptide: row.peptide, lloq: row.lloq, uloq: row.uloq,
         replicates: row.replicates, validCount: validCount,
-        excluded: excluded,
-        blqMismatch: blqMismatch,
-        intraCv: intraCv
+        overrideKey: key,
+        agreement: agreement,
+        excluded: agreement === 'missing' || agreement === 'insufficient',
+        mismatch: agreement === 'mismatch',
+        intraCv: intraCv,
+        autoStatus: autoStatus, status: resolved.status, override: resolved.override
       };
     });
 
     const cvCounts = countCvThresholds(perPeptide.map(function (p) { return p.intraCv; }));
     const validPeptideCount = perPeptide.filter(function (p) { return p.validCount >= 2; }).length;
-    const blqMismatchCount = perPeptide.filter(function (p) { return p.blqMismatch; }).length;
-    const failPeptideCount = cvCounts.cv20 + blqMismatchCount;
-    const verdict = failPeptideCount > THRESHOLDS.duplicateCvFailPeptideCount ? 'FAIL' : 'PASS';
+    const mismatchCount = perPeptide.filter(function (p) { return p.mismatch; }).length;
+    const status = statusCounts(perPeptide);
+    const verdict = resolveVerdict(status.failCount, status.needsReviewCount, THRESHOLDS.duplicateCvFailPeptideCount);
 
     return {
       type: 'duplicate',
       perPeptide: perPeptide,
-      counts: {
+      counts: Object.assign({
         cv10: cvCounts.cv10, cv20: cvCounts.cv20, cv30: cvCounts.cv30, validPeptideCount: validPeptideCount,
-        blqMismatchCount: blqMismatchCount, failPeptideCount: failPeptideCount
-      },
+        mismatchCount: mismatchCount, failPeptideCount: status.failCount
+      }, status),
       verdict: verdict
     };
   }
@@ -376,39 +489,59 @@
    */
 
   /**
+   * Agreement between first-run and rerun for one peptide. Both sides having a
+   * concentration is a numeric comparison (inter-CV/ratio decide, even if the
+   * rerun's own replicates also disagree — that's the intra check's job).
+   * Otherwise the two sides are compared as one pooled set: both BLQ or both NR
+   * agree; anything else (e.g. first-run detected it but the rerun is BLQ, or NR
+   * in one batch and a value in the other) is a mismatch.
+   * @param {ParsedValue[]} firstRun
+   * @param {ParsedValue[]} rerun
+   * @returns {string} same vocabulary as replicateAgreement()
+   */
+  function interRunAgreement(firstRun, rerun) {
+    if (replicateAgreement(firstRun) === 'missing' || replicateAgreement(rerun) === 'missing') return 'missing';
+    if (hasKind(firstRun, 'numeric') && hasKind(rerun, 'numeric')) return 'numeric';
+    return replicateAgreement((firstRun || []).concat(rerun || []));
+  }
+
+  /**
    * Rerun comparison analysis.
    * @param {RerunRowInput[]} rows
+   * @param {Record<string, ('PASS'|'FAIL')>} [overrides] - reviewer decisions keyed by
+   *   'intra:' + overrideKey(row) and 'inter:' + overrideKey(row)
    * @returns {Object} BatchResult (verdict/recommendation computed separately by rerunDecision)
    */
-  function rerunAnalysis(rows) {
+  function rerunAnalysis(rows, overrides) {
+    overrides = overrides || {};
     const perPeptide = (rows || []).map(function (row) {
       const firstNumeric = numericValues(row.firstRun);
       const rerunNumeric = numericValues(row.rerun);
       const intraCv = rerunNumeric.length >= 2 ? cvPercent(rerunNumeric) : null;
       const r = ratio(firstNumeric, rerunNumeric);
       const interCv = interRunCv(firstNumeric, rerunNumeric);
-      // Both sides consistently BLQ, or both sides consistently NR, is a clean
-      // agreeing result (e.g. still below the detection limit after rerun) —
-      // not a discrepancy — so don't flag it the same as a real mismatch
-      // (first-run detected a value but the rerun didn't, or vice versa).
-      const bothSidesAgree = (allShareExcludedKind(row.firstRun, 'blq') && allShareExcludedKind(row.rerun, 'blq')) ||
-        (allShareExcludedKind(row.firstRun, 'nr') && allShareExcludedKind(row.rerun, 'nr'));
-      const excluded = (firstNumeric.length === 0 || rerunNumeric.length === 0) && !bothSidesAgree;
-      // Xukun's rule, applied on two axes: the rerun's OWN replicates disagreeing
-      // on BLQ vs numeric is an intra-run problem (independent of intra-CV%);
-      // first-run vs rerun disagreeing is an inter-run problem (independent of
-      // inter-CV%) — one run detected the analyte, the other didn't.
-      const intraBlqMismatch = hasBlqNumericMismatch(row.rerun);
-      const interBlqMismatch = (hasKind(row.firstRun, 'blq') && rerunNumeric.length > 0) ||
-        (firstNumeric.length > 0 && hasKind(row.rerun, 'blq'));
+      // Same agreement rule on two axes: the rerun's OWN replicates (intra) and
+      // first-run vs rerun (inter). Agreeing BLQ/NR passes on that axis; a
+      // mismatch needs a reviewer's decision on that axis.
+      const intraAgreement = replicateAgreement(row.rerun);
+      const interAgreement = interRunAgreement(row.firstRun, row.rerun);
+      const key = overrideKey(row);
+      const intraAuto = autoCheckStatus(intraAgreement, intraCv, THRESHOLDS.rerunIntraFailPercent);
+      const interAuto = autoCheckStatus(interAgreement, interCv, THRESHOLDS.rerunInterFailPercent);
+      const intra = applyOverride(intraAuto, overrides['intra:' + key]);
+      const inter = applyOverride(interAuto, overrides['inter:' + key]);
       return {
         protein: row.protein, mycoId: row.mycoId, peptideId: row.peptideId,
         peptide: row.peptide, lloq: row.lloq, uloq: row.uloq,
         firstRun: row.firstRun, rerun: row.rerun,
         firstRunValidCount: firstNumeric.length, rerunValidCount: rerunNumeric.length,
-        excluded: excluded,
-        intraBlqMismatch: intraBlqMismatch, interBlqMismatch: interBlqMismatch,
-        intraCv: intraCv, ratio: r, ratioBucket: bucketForRatio(r), interCv: interCv
+        overrideKey: key,
+        intraAgreement: intraAgreement, interAgreement: interAgreement,
+        excluded: interAgreement === 'missing' || interAgreement === 'insufficient',
+        intraMismatch: intraAgreement === 'mismatch', interMismatch: interAgreement === 'mismatch',
+        intraCv: intraCv, ratio: r, ratioBucket: bucketForRatio(r), interCv: interCv,
+        intraAutoStatus: intraAuto, intraStatus: intra.status, intraOverride: intra.override,
+        interAutoStatus: interAuto, interStatus: inter.status, interOverride: inter.override
       };
     });
 
@@ -416,8 +549,10 @@
     const interCounts = countCvThresholds(perPeptide.map(function (p) { return p.interCv; }));
     const intraValidPeptideCount = perPeptide.filter(function (p) { return p.rerunValidCount >= 2; }).length;
     const interValidPeptideCount = perPeptide.filter(function (p) { return p.ratio != null; }).length;
-    const intraBlqMismatchCount = perPeptide.filter(function (p) { return p.intraBlqMismatch; }).length;
-    const interBlqMismatchCount = perPeptide.filter(function (p) { return p.interBlqMismatch; }).length;
+    const intraMismatchCount = perPeptide.filter(function (p) { return p.intraMismatch; }).length;
+    const interMismatchCount = perPeptide.filter(function (p) { return p.interMismatch; }).length;
+    const intraStatus = statusCounts(perPeptide.map(function (p) { return { status: p.intraStatus, override: p.intraOverride }; }));
+    const interStatus = statusCounts(perPeptide.map(function (p) { return { status: p.interStatus, override: p.interOverride }; }));
 
     const ratioBuckets = {};
     RATIO_BUCKETS.forEach(function (b) { ratioBuckets[b.label] = 0; });
@@ -428,14 +563,14 @@
     return {
       type: 'rerun',
       perPeptide: perPeptide,
-      intraCounts: {
+      intraCounts: Object.assign({
         cv10: intraCounts.cv10, cv20: intraCounts.cv20, cv30: intraCounts.cv30, validPeptideCount: intraValidPeptideCount,
-        blqMismatchCount: intraBlqMismatchCount, failPeptideCount: intraCounts.cv20 + intraBlqMismatchCount
-      },
-      interCounts: {
+        mismatchCount: intraMismatchCount, failPeptideCount: intraStatus.failCount
+      }, intraStatus),
+      interCounts: Object.assign({
         cv10: interCounts.cv10, cv20: interCounts.cv20, cv30: interCounts.cv30, validPeptideCount: interValidPeptideCount,
-        blqMismatchCount: interBlqMismatchCount, failPeptideCount: interCounts.cv30 + interBlqMismatchCount
-      },
+        mismatchCount: interMismatchCount, failPeptideCount: interStatus.failCount
+      }, interStatus),
       ratioBuckets: ratioBuckets
     };
   }
@@ -457,9 +592,11 @@
    * batches — never average pool-plasma values across batches.
    * @param {PoolPlasmaRowInput[]} firstRunPoolRows
    * @param {PoolPlasmaRowInput[]} rerunPoolRows - same row order/length as firstRunPoolRows
+   * @param {Record<string, ('PASS'|'FAIL')>} [overrides] - reviewer decisions keyed by overrideKey(row)
    * @returns {Object} BatchResult
    */
-  function poolPlasmaAnalysis(firstRunPoolRows, rerunPoolRows) {
+  function poolPlasmaAnalysis(firstRunPoolRows, rerunPoolRows, overrides) {
+    overrides = overrides || {};
     const n = Math.min((firstRunPoolRows || []).length, (rerunPoolRows || []).length);
     const perPeptide = [];
     for (let i = 0; i < n; i++) {
@@ -470,28 +607,31 @@
       const firstIntraCv = firstNumeric.length >= 2 ? cvPercent(firstNumeric) : null;
       const rerunIntraCv = rerunNumeric.length >= 2 ? cvPercent(rerunNumeric) : null;
       const r = ratio(firstNumeric, rerunNumeric);
-      // Xukun's rule, applied across BOTH sides together — side A and side B
-      // are literally "two samples" being compared here: if either side's own
-      // replicates disagree on BLQ vs numeric, or the two sides disagree with
-      // each other, that's a fail independent of CV%.
-      const blqMismatch = hasBlqNumericMismatch((firstRow.poolReplicates || []).concat(rerunRow.poolReplicates || []));
+      // Agreement is judged across BOTH sides together — side A and side B are
+      // literally "two samples" being compared here: all BLQ or all NR passes;
+      // any mix (within a side or between sides) needs a reviewer's decision.
+      const agreement = replicateAgreement((firstRow.poolReplicates || []).concat(rerunRow.poolReplicates || []));
+      // Intra-run CV check is evaluated against the rerun-batch pool plasma
+      // replicates (the batch being qualified), at the pool-plasma 30% threshold.
+      const autoStatus = autoCheckStatus(agreement, rerunIntraCv, THRESHOLDS.poolPlasmaCvFailPercent);
+      const key = overrideKey(firstRow);
+      const resolved = applyOverride(autoStatus, overrides[key]);
       perPeptide.push({
         protein: firstRow.protein, mycoId: firstRow.mycoId, peptideId: firstRow.peptideId,
         peptide: firstRow.peptide, lloq: firstRow.lloq, uloq: firstRow.uloq,
         firstRunReplicates: firstRow.poolReplicates, rerunReplicates: rerunRow.poolReplicates,
-        firstIntraCv: firstIntraCv, rerunIntraCv: rerunIntraCv, blqMismatch: blqMismatch,
+        firstIntraCv: firstIntraCv, rerunIntraCv: rerunIntraCv,
+        overrideKey: key, agreement: agreement, mismatch: agreement === 'mismatch',
+        autoStatus: autoStatus, status: resolved.status, override: resolved.override,
         ratio: r, ratioBucket: bucketForRatio(r)
       });
     }
 
-    // Intra-run CV check is evaluated against the rerun-batch pool plasma replicates
-    // (the batch being qualified), same primitive as duplicateAnalysis but against
-    // the pool-plasma 30% threshold (see ASSUMPTIONS: 'threshold-inconsistency').
     const cvCounts = countCvThresholds(perPeptide.map(function (p) { return p.rerunIntraCv; }));
     const validPeptideCount = perPeptide.filter(function (p) { return p.rerunIntraCv != null; }).length;
-    const blqMismatchCount = perPeptide.filter(function (p) { return p.blqMismatch; }).length;
-    const failPeptideCount = cvCounts.cv30 + blqMismatchCount;
-    const verdict = failPeptideCount > THRESHOLDS.poolPlasmaCvFailPeptideCount ? 'FAIL' : 'PASS';
+    const mismatchCount = perPeptide.filter(function (p) { return p.mismatch; }).length;
+    const status = statusCounts(perPeptide);
+    const verdict = resolveVerdict(status.failCount, status.needsReviewCount, THRESHOLDS.poolPlasmaCvFailPeptideCount);
 
     const ratioBuckets = {};
     RATIO_BUCKETS.forEach(function (b) { ratioBuckets[b.label] = 0; });
@@ -502,10 +642,10 @@
     return {
       type: 'poolPlasma',
       perPeptide: perPeptide,
-      counts: {
+      counts: Object.assign({
         cv10: cvCounts.cv10, cv20: cvCounts.cv20, cv30: cvCounts.cv30, validPeptideCount: validPeptideCount,
-        blqMismatchCount: blqMismatchCount, failPeptideCount: failPeptideCount
-      },
+        mismatchCount: mismatchCount, failPeptideCount: status.failCount
+      }, status),
       ratioBuckets: ratioBuckets,
       verdict: verdict
     };
@@ -585,7 +725,7 @@
    * @param {{cv10:number, cv20:number, cv30:number, validPeptideCount:number}} interCounts
    * @param {Record<string, number>} ratioBuckets - label -> count, from rerunAnalysis
    * @param {{sampleId:string, ratio:number}[]} [perSampleRatios] - used only for the directional-drift check
-   * @returns {{intraVerdict:('PASS'|'FAIL'), interVerdict:('PASS'|'FAIL'), recommendation:('use-first-run'|'use-rerun'|'manual-review'|'escalate-vendor'), directionalDrift:Object, reasonCode:string}}
+   * @returns {{intraVerdict:('PASS'|'FAIL'|'NEEDS_REVIEW'), interVerdict:('PASS'|'FAIL'|'NEEDS_REVIEW'), recommendation:('use-first-run'|'use-rerun'|'manual-review'|'needs-review'|'escalate-vendor'), directionalDrift:Object, reasonCode:string}}
    */
   function rerunDecision(intraCounts, interCounts, ratioBuckets, perSampleRatios) {
     // failPeptideCount folds in Xukun's BLQ/concentration-mismatch rule
@@ -593,13 +733,17 @@
     // pass in counts objects from before that field existed.
     const intraFailCount = intraCounts.failPeptideCount != null ? intraCounts.failPeptideCount : intraCounts.cv20;
     const interFailCount = interCounts.failPeptideCount != null ? interCounts.failPeptideCount : interCounts.cv30;
-    const intraFail = intraFailCount > THRESHOLDS.rerunIntraFailPeptideCount;
+    const intraVerdict = resolveVerdict(intraFailCount, intraCounts.needsReviewCount, THRESHOLDS.rerunIntraFailPeptideCount);
 
     const totalBuckets = Object.keys(ratioBuckets || {}).reduce(function (sum, k) { return sum + ratioBuckets[k]; }, 0);
     const inBand = acceptableBandCount(ratioBuckets || {});
     // "ratio in band" = majority of peptides land in the 0.8-1.2 acceptable band.
     const ratioInBand = totalBuckets === 0 ? true : (inBand / totalBuckets) >= 0.5;
-    const interFail = interFailCount > THRESHOLDS.rerunInterFailPeptideCount || !ratioInBand;
+    const interVerdict = ratioInBand
+      ? resolveVerdict(interFailCount, interCounts.needsReviewCount, THRESHOLDS.rerunInterFailPeptideCount)
+      : 'FAIL';
+    const intraFail = intraVerdict === 'FAIL';
+    const interFail = interVerdict === 'FAIL';
 
     const drift = directionalDriftFlag(perSampleRatios || []);
 
@@ -613,8 +757,13 @@
     //   intra FAIL, inter FAIL -> not covered by Xukun's examples; flag for manual review, don't auto-decide
     // "escalate-vendor" is reserved for the separate batch-wide signal in batchLevelEscalation() below,
     // not returned from this per-sample table.
+    // Unreviewed BLQ/NR mismatches that could still flip either verdict hold the
+    // decision until a reviewer resolves them, rather than guessing a branch.
     let recommendation, reasonCode;
-    if (!intraFail && !interFail) {
+    if (intraVerdict === 'NEEDS_REVIEW' || interVerdict === 'NEEDS_REVIEW') {
+      recommendation = 'needs-review';
+      reasonCode = 'PENDING_REVIEW';
+    } else if (!intraFail && !interFail) {
       recommendation = 'use-first-run';
       reasonCode = 'INTRA_PASS_INTER_PASS';
     } else if (!intraFail && interFail) {
@@ -630,8 +779,8 @@
     if (drift.flagged) reasonCode = 'SYSTEMATIC_DRIFT'; // batch-level flag augments, doesn't replace, the recommendation
 
     return {
-      intraVerdict: intraFail ? 'FAIL' : 'PASS',
-      interVerdict: interFail ? 'FAIL' : 'PASS',
+      intraVerdict: intraVerdict,
+      interVerdict: interVerdict,
       recommendation: recommendation,
       directionalDrift: drift,
       reasonCode: reasonCode
@@ -650,10 +799,27 @@
     INTRA_FAIL_INTER_PASS: 'intra-run CV failed, so the rerun replicates disagree with each other and neither individual value can be trusted, even though their average happens to land near first-run; using first-run for reporting, with the rerun marked as research-only.',
     INTRA_PASS_INTER_FAIL: 'indicating a plate-to-plate shift rather than duplicate imprecision.',
     INTRA_FAIL_INTER_FAIL: 'both intra-run and inter-run CV failed; flagging for manual review rather than an automatic recommendation.',
+    PENDING_REVIEW: 'BLQ/NR mismatches still awaiting review could change the outcome; resolve them before using a recommendation.',
     SYSTEMATIC_DRIFT: 'indicating a systematic drift across the batch rather than isolated sample issues; recommend escalating to the vendor.'
   };
 
   function capitalize(s) { return s ? s.charAt(0).toUpperCase() + s.slice(1) : s; }
+
+  function verdictWord(verdict) {
+    if (verdict === 'PASS') return 'passed';
+    if (verdict === 'NEEDS_REVIEW') return 'needs review';
+    return 'FAILED';
+  }
+
+  /** "; 3 peptide(s) had a BLQ/NR mismatch ...: 1 overridden to pass, 2 awaiting review" — empty when none. */
+  function mismatchClause(counts, where) {
+    if (!counts.mismatchCount) return '';
+    const parts = [];
+    if (counts.overriddenPassCount) parts.push(counts.overriddenPassCount + ' overridden to pass');
+    if (counts.overriddenFailCount) parts.push(counts.overriddenFailCount + ' overridden to fail');
+    if (counts.needsReviewCount) parts.push(counts.needsReviewCount + ' awaiting review');
+    return '; ' + counts.mismatchCount + ' peptide(s) had a BLQ/NR mismatch ' + where + (parts.length ? ': ' + parts.join(', ') : '');
+  }
 
   /**
    * Deterministic, rule-based one-paragraph write-up from already-computed counts.
@@ -667,31 +833,29 @@
   function summarySentence(type, batchResult, decision, perSampleSummary) {
     if (type === 'duplicate') {
       const c = batchResult.counts;
-      const mismatchClause = c.blqMismatchCount > 0
-        ? '; ' + c.blqMismatchCount + ' peptide(s) had a BLQ/concentration mismatch (one replicate detected, another didn\'t)' : '';
-      return 'Intra-run CV ' + (batchResult.verdict === 'PASS' ? 'passed' : 'FAILED') +
+      return 'Intra-run CV ' + verdictWord(batchResult.verdict) +
         ' (' + c.cv20 + '/' + c.validPeptideCount + ' peptides >20% CV, threshold is >' +
-        THRESHOLDS.duplicateCvFailPeptideCount + ')' + mismatchClause + '.';
+        THRESHOLDS.duplicateCvFailPeptideCount + ')' + mismatchClause(c, '(one replicate BLQ/NR, another not)') + '.';
     }
 
     if (type === 'poolPlasma') {
       const c = batchResult.counts;
-      const mismatchClause = c.blqMismatchCount > 0
-        ? '; ' + c.blqMismatchCount + ' peptide(s) had a BLQ/concentration mismatch between sides' : '';
-      return 'Pool plasma intra-run CV ' + (batchResult.verdict === 'PASS' ? 'passed' : 'FAILED') +
+      return 'Pool plasma intra-run CV ' + verdictWord(batchResult.verdict) +
         ' (' + c.cv30 + '/' + c.validPeptideCount + ' peptides >30% CV, threshold is >' +
-        THRESHOLDS.poolPlasmaCvFailPeptideCount + ')' + mismatchClause + '.';
+        THRESHOLDS.poolPlasmaCvFailPeptideCount + ')' + mismatchClause(c, 'between sides') + '.';
     }
 
     if (type === 'rerun') {
       const samples = perSampleSummary || [];
       const total = samples.length;
       const failedSamples = samples.filter(function (s) { return s.interVerdict === 'FAIL'; });
-      const passCount = total - failedSamples.length;
+      const reviewCount = samples.filter(function (s) { return s.interVerdict === 'NEEDS_REVIEW'; }).length;
+      const passCount = total - failedSamples.length - reviewCount;
 
       let sentence = total > 0
-        ? 'Inter-run CV passed for ' + passCount + '/' + total + ' samples'
-        : 'Inter-run CV ' + (decision.interVerdict === 'PASS' ? 'passed' : 'FAILED');
+        ? 'Inter-run CV passed for ' + passCount + '/' + total + ' samples' +
+          (reviewCount > 0 ? '; ' + reviewCount + ' awaiting review of BLQ/NR mismatches' : '')
+        : 'Inter-run CV ' + verdictWord(decision.interVerdict);
 
       if (failedSamples.length > 0 && failedSamples.length <= 2) {
         const names = failedSamples.map(function (s) {
@@ -788,6 +952,12 @@
     hasKind: hasKind,
     hasBlqNumericMismatch: hasBlqNumericMismatch,
     isConsistentNonNumericAgreement: isConsistentNonNumericAgreement,
+    replicateAgreement: replicateAgreement,
+    interRunAgreement: interRunAgreement,
+    autoCheckStatus: autoCheckStatus,
+    overrideKey: overrideKey,
+    applyOverride: applyOverride,
+    resolveVerdict: resolveVerdict,
     mean: mean,
     sd: sd,
     cvPercent: cvPercent,

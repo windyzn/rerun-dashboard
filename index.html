@@ -89,10 +89,11 @@
   .card-header h3{ margin:0 0 2px; font-size:15px; font-weight:700; }
   .card-subtitle{ color:var(--muted); font-size:12.5px; }
   .badge{ padding:3px 10px; border-radius:12px; font-size:12px; font-weight:700; white-space:nowrap; }
-  .badge-pass, .badge-fail{ display:inline-flex; align-items:center; gap:6px; padding:6px 14px 6px 10px; border-radius:999px; font-size:13px; font-weight:800; color:#fff; flex-shrink:0; }
+  .badge-pass, .badge-fail, .badge-review{ display:inline-flex; align-items:center; gap:6px; padding:6px 14px 6px 10px; border-radius:999px; font-size:13px; font-weight:800; color:#fff; flex-shrink:0; }
   .badge-pass{ background:var(--pass-solid); }
   .badge-fail{ background:var(--fail-solid); }
-  .badge-pass .icon, .badge-fail .icon{ width:13px; height:13px; stroke-width:3; }
+  .badge-review{ background:var(--warn-text); }
+  .badge-pass .icon, .badge-fail .icon, .badge-review .icon{ width:13px; height:13px; stroke-width:3; }
   .badge-vip{ background:#F3E8FC; color:#7B2CBF; padding:2px 8px; border-radius:999px; font-size:11px; font-weight:700; margin-left:6px; }
   .flag-pills{ margin:8px 0; display:flex; gap:6px; flex-wrap:wrap; }
   .flag-pill{ background:var(--warn-bg); color:#8A5A00; border-radius:6px; padding:5px 10px; font-size:12px; font-weight:700; }
@@ -139,6 +140,17 @@
   .flag-nr{ background:#eceff1; color:#455a64; padding:1px 5px; border-radius:4px; font-size:11.5px; }
   .flag-error{ background:var(--fail-bg); color:var(--fail-text); padding:1px 5px; border-radius:4px; font-size:11.5px; }
   .flag-empty, .flag-na{ color:var(--muted); }
+  /* Per-peptide check status + reviewer override (UNI-776) */
+  .status-pill{ display:inline-block; padding:1px 7px; border-radius:999px; font-size:11.5px; font-weight:700; white-space:nowrap; }
+  .status-pass{ background:var(--pass-bg); color:var(--pass-text); }
+  .status-fail{ background:var(--fail-bg); color:var(--fail-text); }
+  .status-review{ background:var(--warn-bg); color:#8A5A00; }
+  .status-na{ color:var(--muted); font-weight:600; }
+  .review-cell{ display:flex; flex-direction:column; align-items:flex-start; gap:3px; }
+  .review-auto{ color:var(--muted); font-size:11.5px; }
+  .review-select{ font-size:12px; padding:1px 4px; border:1px solid var(--border); border-radius:5px; background:#fff; }
+  .review-bulk{ display:flex; align-items:center; gap:8px; }
+  .review-bulk .secondary{ padding:3px 10px; font-size:12px; }
   .tag-pill{ border-radius:999px; padding:3px 9px; font-size:11px; font-weight:700; margin-right:2px; display:inline-block; text-transform:none; }
   .tag-pill.cat-First-run{ background:#EAF3F6; color:#18374B; }
   .tag-pill.cat-Rerun{ background:#E8EEFC; color:#2A4D9E; }
@@ -248,7 +260,7 @@
     .summary-layout{ gap:0; }
     .print-only{ display:block; margin-bottom:18px; }
     .card{ box-shadow:none; border:1px solid #ccc; break-inside:avoid; }
-    button.link-btn{ display:none; }
+    button.link-btn, .review-select, .review-bulk{ display:none !important; }
   }
 </style>
 </head>
@@ -513,7 +525,8 @@ const LS_KEYS = {
   referencePanel: 'qc.referencePanel.v2',
   batches: 'qc.batches.v1',
   sampleColumns: 'qc.sampleColumns.v2',
-  analyses: 'qc.analyses.v1'
+  analyses: 'qc.analyses.v1',
+  reviewOverrides: 'qc.reviewOverrides.v1'
 };
 
 const REF_FIELDS = ['measureType', 'biofluid', 'measureIdentifier', 'units', 'protein', 'mycoId', 'peptideId', 'peptide', 'lloq', 'uloq'];
@@ -523,6 +536,7 @@ const RECOMMENDATION_LABEL = {
   'use-first-run': 'Use FIRST-RUN data for reporting (rerun marked research-only).',
   'use-rerun': 'Use RERUN data for reporting (it\'s internally reproducible; first-run is the likely outlier).',
   'manual-review': 'Manual review needed — both intra- and inter-run CV failed, so no automatic recommendation.',
+  'needs-review': 'Resolve the flagged BLQ/NR mismatches first — they could change the outcome.',
   'escalate-vendor': 'Escalate to vendor — recommend full batch rerun.'
 };
 
@@ -531,19 +545,25 @@ function loadState() {
   const batchesRaw = localStorage.getItem(LS_KEYS.batches);
   const colsRaw = localStorage.getItem(LS_KEYS.sampleColumns);
   const analysesRaw = localStorage.getItem(LS_KEYS.analyses);
+  const overridesRaw = localStorage.getItem(LS_KEYS.reviewOverrides);
   return {
     referencePanel: refRaw ? JSON.parse(refRaw) : { version: 2, updatedAt: null, rows: [] },
     batches: batchesRaw ? JSON.parse(batchesRaw) : [],
     sampleColumns: colsRaw ? JSON.parse(colsRaw) : [],
     // Named snapshots the user has explicitly saved via the "Save Analysis" button —
     // separate from the live working state above, which autosaves continuously.
-    analyses: analysesRaw ? JSON.parse(analysesRaw) : []
+    analyses: analysesRaw ? JSON.parse(analysesRaw) : [],
+    // Reviewer decisions on flagged BLQ/NR mismatches:
+    // { [cardId]: { [overrideKey]: { decision: 'PASS'|'FAIL', at: ISO string } } }.
+    // cardId is the same 'dup_'/'rerun_'/'pool_' + anchor column id the cards use.
+    reviewOverrides: overridesRaw ? JSON.parse(overridesRaw) : {}
   };
 }
 function saveReferencePanel() { localStorage.setItem(LS_KEYS.referencePanel, JSON.stringify(state.referencePanel)); }
 function saveBatches() { localStorage.setItem(LS_KEYS.batches, JSON.stringify(state.batches)); }
 function saveSampleColumns() { localStorage.setItem(LS_KEYS.sampleColumns, JSON.stringify(state.sampleColumns)); }
 function saveAnalyses() { localStorage.setItem(LS_KEYS.analyses, JSON.stringify(state.analyses)); }
+function saveReviewOverrides() { localStorage.setItem(LS_KEYS.reviewOverrides, JSON.stringify(state.reviewOverrides)); }
 function deepClone(obj) { return JSON.parse(JSON.stringify(obj)); }
 
 let state = loadState();
@@ -678,12 +698,16 @@ function renderHistogram(buckets) {
       '<div class="hist-count">' + count + '</div><div class="hist-label">' + b.label + '</div></div>';
   }).join('') + '</div>';
 }
+function verdictBadge(verdict) {
+  if (verdict === 'NEEDS_REVIEW') return '<span class="badge badge-review">' + icon('warning') + 'NEEDS REVIEW</span>';
+  return '<span class="badge badge-' + (verdict === 'PASS' ? 'pass' : 'fail') + '">' + icon(verdict === 'PASS' ? 'check' : 'x') + verdict + '</span>';
+}
 function renderCardShell(opts) {
   const expanded = uiState.expanded.has(opts.id);
   return '<div class="card">' +
     '<div class="card-header">' +
       '<div><h3>' + opts.title + '</h3>' + (opts.subtitle ? '<div class="card-subtitle">' + opts.subtitle + '</div>' : '') + '</div>' +
-      '<span class="badge badge-' + (opts.verdict === 'PASS' ? 'pass' : 'fail') + '">' + icon(opts.verdict === 'PASS' ? 'check' : 'x') + opts.verdict + '</span>' +
+      verdictBadge(opts.verdict) +
     '</div>' +
     (opts.extraFlagsHtml ? '<div class="flag-pills">' + opts.extraFlagsHtml + '</div>' : '') +
     (opts.factsHtml || (opts.sentence ? '<p class="card-sentence">' + opts.sentence + '</p>' : '')) +
@@ -699,7 +723,7 @@ function renderCardShell(opts) {
 // Drilldown table (shared by all 3 analysis types)
 // ---------------------------------------------------------------------
 
-function renderDrilldownTable(cardId, rows, columns, isFlaggedFn) {
+function renderDrilldownTable(cardId, rows, columns, isFlaggedFn, extraControlsHtml) {
   const ui = uiState.drilldown[cardId] = uiState.drilldown[cardId] || { sortKey: null, sortDir: 1, flaggedOnly: false };
   let displayRows = rows.slice();
   if (ui.flaggedOnly) displayRows = displayRows.filter(isFlaggedFn);
@@ -724,6 +748,7 @@ function renderDrilldownTable(cardId, rows, columns, isFlaggedFn) {
     return '<tr class="' + (flagged ? 'flagged-row' : '') + '">' + columns.map(function (c) { return '<td>' + c.render(row) + '</td>'; }).join('') + '</tr>';
   }).join('');
   return '<div class="drilldown-controls"><label><input type="checkbox" ' + (ui.flaggedOnly ? 'checked' : '') + ' onchange="toggleFlaggedOnly(\'' + cardId + '\')"> Flagged rows only</label>' +
+    (extraControlsHtml || '') +
     '<span class="hint">' + displayRows.length + '/' + rows.length + ' rows shown</span></div>' +
     '<div class="drilldown-scroll"><table><thead><tr>' + headerHtml + '</tr></thead><tbody>' + rowsHtml + '</tbody></table></div>';
 }
@@ -908,8 +933,10 @@ function handleStartNewAnalysis() {
   }
   state.sampleColumns = [];
   state.batches = [];
+  state.reviewOverrides = {};
   saveSampleColumns();
   saveBatches();
+  saveReviewOverrides();
   pendingGrid = null;
   pendingClassifications = [];
   pendingAutoDetectCount = 0;
@@ -935,7 +962,8 @@ function currentAnalysisSnapshot() {
   return {
     referencePanel: deepClone(state.referencePanel),
     batches: deepClone(state.batches),
-    sampleColumns: deepClone(state.sampleColumns)
+    sampleColumns: deepClone(state.sampleColumns),
+    reviewOverrides: deepClone(state.reviewOverrides)
   };
 }
 
@@ -945,9 +973,11 @@ function applyAnalysisSnapshot(snapshot) {
   state.referencePanel = deepClone(snapshot.referencePanel);
   state.batches = deepClone(snapshot.batches);
   state.sampleColumns = deepClone(snapshot.sampleColumns);
+  state.reviewOverrides = deepClone(snapshot.reviewOverrides || {}); // snapshots saved before UNI-776 have none
   saveReferencePanel();
   saveBatches();
   saveSampleColumns();
+  saveReviewOverrides();
   pendingGrid = null;
   pendingClassifications = [];
   pendingAutoDetectCount = 0;
@@ -1251,13 +1281,19 @@ function demoGeneratedValue(row, rowIndex, sampleSeed, columnSeed) {
  * First-run/Rerun/Duplicate/Pool-plasma-replicate columns); columnSeed picks
  * out this specific column's small noise on top of that shared base.
  * opts.blqAnchor forces the F5/DVIVHPLPLK anchor row (index 0) to BLQ,
- * preserving the build's validated "BLQ/BLQ excluded, not 0 or NaN" demo.
+ * preserving the build's validated "BLQ/BLQ agree, not 0 or NaN" demo.
+ * opts.raw maps row index -> raw cell text (e.g. 'NR', 'BLQ') to plant the
+ * BLQ/NR agreements and mismatches the reviewer-override flow needs to show;
+ * 'BLQ' expands to that row's real "BLQ < lloq".
  */
 function buildDemoValues(sampleSeed, columnSeed, opts) {
   opts = opts || {};
   return DEMO_REFERENCE_ROWS.map(function (row, i) {
     if (i === 0 && opts.blqAnchor && typeof row.lloq === 'number') {
       return Calc.parseValue('BLQ < ' + row.lloq);
+    }
+    if (opts.raw && opts.raw[i] != null) {
+      return Calc.parseValue(opts.raw[i] === 'BLQ' ? 'BLQ < ' + row.lloq : opts.raw[i]);
     }
     return Calc.parseValue(String(demoGeneratedValue(row, i, sampleSeed, columnSeed)));
   });
@@ -1283,14 +1319,14 @@ function handleLoadDemoData() {
   // sample (so its replicates/reruns land near the same underlying
   // concentration); columnSeed only adds each column's own small noise.
   const firstRun228 = { id: uid('col'), sampleId: 'P1-228G789', category: 'First-run', vip: false, batchId: juneBatch.id, linkedFirstRunColumnId: null, pastedAt: new Date().toISOString(), values: buildDemoValues(1, 1, { blqAnchor: true }) };
-  const dup228 = { id: uid('col'), sampleId: 'P4A-228G789', category: 'Duplicate', vip: false, batchId: julyBatch.id, linkedFirstRunColumnId: firstRun228.id, pastedAt: new Date().toISOString(), values: buildDemoValues(1, 2, { blqAnchor: true }) };
+  const dup228 = { id: uid('col'), sampleId: 'P4A-228G789', category: 'Duplicate', vip: false, batchId: julyBatch.id, linkedFirstRunColumnId: firstRun228.id, pastedAt: new Date().toISOString(), values: buildDemoValues(1, 2, { blqAnchor: true, raw: { 3: 'BLQ', 7: 'BLQ' } }) };
 
   const firstRun473 = { id: uid('col'), sampleId: 'P1-473G835', category: 'First-run', vip: false, batchId: juneBatch.id, linkedFirstRunColumnId: null, pastedAt: new Date().toISOString(), values: buildDemoValues(2, 1) };
-  const rerun473a = { id: uid('col'), sampleId: 'P1-473G835', category: 'Rerun', vip: false, batchId: julyBatch.id, linkedFirstRunColumnId: firstRun473.id, pastedAt: new Date().toISOString(), values: buildDemoValues(2, 2) };
-  const rerun473b = { id: uid('col'), sampleId: 'P1-473G835', category: 'Rerun', vip: false, batchId: julyBatch.id, linkedFirstRunColumnId: firstRun473.id, pastedAt: new Date().toISOString(), values: buildDemoValues(2, 3) };
+  const rerun473a = { id: uid('col'), sampleId: 'P1-473G835', category: 'Rerun', vip: false, batchId: julyBatch.id, linkedFirstRunColumnId: firstRun473.id, pastedAt: new Date().toISOString(), values: buildDemoValues(2, 2, { raw: { 5: 'BLQ', 9: 'NR' } }) };
+  const rerun473b = { id: uid('col'), sampleId: 'P1-473G835', category: 'Rerun', vip: false, batchId: julyBatch.id, linkedFirstRunColumnId: firstRun473.id, pastedAt: new Date().toISOString(), values: buildDemoValues(2, 3, { raw: { 9: 'NR' } }) };
 
-  const firstRunVip = { id: uid('col'), sampleId: 'P1-482M788', category: 'First-run', vip: true, batchId: julyBatch.id, linkedFirstRunColumnId: null, pastedAt: new Date().toISOString(), values: buildDemoValues(3, 1) };
-  const dupVip = { id: uid('col'), sampleId: 'P1-482M788', category: 'Duplicate', vip: true, batchId: julyBatch.id, linkedFirstRunColumnId: firstRunVip.id, pastedAt: new Date().toISOString(), values: buildDemoValues(3, 2) };
+  const firstRunVip = { id: uid('col'), sampleId: 'P1-482M788', category: 'First-run', vip: true, batchId: julyBatch.id, linkedFirstRunColumnId: null, pastedAt: new Date().toISOString(), values: buildDemoValues(3, 1, { raw: { 2: 'NR', 4: 'NR' } }) };
+  const dupVip = { id: uid('col'), sampleId: 'P1-482M788', category: 'Duplicate', vip: true, batchId: julyBatch.id, linkedFirstRunColumnId: firstRunVip.id, pastedAt: new Date().toISOString(), values: buildDemoValues(3, 2, { raw: { 2: 'NR' } }) };
 
   // All 4 pool-plasma columns share sampleSeed=4 — they're the same physical
   // control lot (BRH1447353) measured across batches, so they should land
@@ -2436,12 +2472,21 @@ function autoLinkPoolPlasma() {
 // Computing BatchResults from state (always derived, never persisted)
 // ---------------------------------------------------------------------
 
+/** Flattens one card's stored reviewer overrides to the { key: 'PASS'|'FAIL' }
+ * map the Calc analyses take. */
+function overridesForCard(cardId) {
+  const stored = state.reviewOverrides[cardId] || {};
+  const map = {};
+  Object.keys(stored).forEach(function (key) { map[key] = stored[key].decision; });
+  return map;
+}
+
 function computeDuplicateResult(group) {
   const cols = [group.anchor].concat(group.members);
   const rows = state.referencePanel.rows.map(function (ref, i) {
     return Object.assign({}, ref, { replicates: cols.map(function (c) { return c.values[i]; }) });
   });
-  return Calc.duplicateAnalysis(rows);
+  return Calc.duplicateAnalysis(rows, overridesForCard('dup_' + group.anchor.id));
 }
 
 function computeRerunResult(group) {
@@ -2451,7 +2496,7 @@ function computeRerunResult(group) {
       rerun: group.members.map(function (c) { return c.values[i]; })
     });
   });
-  const batchResult = Calc.rerunAnalysis(rows);
+  const batchResult = Calc.rerunAnalysis(rows, overridesForCard('rerun_' + group.anchor.id));
   const decision = Calc.rerunDecision(batchResult.intraCounts, batchResult.interCounts, batchResult.ratioBuckets, []);
   const validRatios = batchResult.perPeptide.map(function (p) { return p.ratio; }).filter(function (r) { return r != null; });
   const sampleRatio = Calc.mean(validRatios);
@@ -2470,15 +2515,108 @@ function computePoolPlasmaResult(group) {
   const sideBRows = state.referencePanel.rows.map(function (ref, i) {
     return Object.assign({}, ref, { poolReplicates: [b.values[i]] });
   });
-  const batchResult = Calc.poolPlasmaAnalysis(sideARows, sideBRows);
+  const batchResult = Calc.poolPlasmaAnalysis(sideARows, sideBRows, overridesForCard('pool_' + a.id));
   return { anchor: a, partner: b, batchResult: batchResult };
+}
+
+// ---------------------------------------------------------------------
+// Reviewer overrides (UNI-776) — BLQ/NR mismatches are never passed or failed
+// automatically; the reviewer decides, and both the automatic result and the
+// override stay visible in the drilldown and exports.
+// ---------------------------------------------------------------------
+
+const STATUS_LABEL = { pass: 'Pass', fail: 'Fail', 'needs-review': 'Needs review', 'not-evaluated': 'N/A' };
+const STATUS_CLASS = { pass: 'status-pass', fail: 'status-fail', 'needs-review': 'status-review', 'not-evaluated': 'status-na' };
+const STATUS_SORT = { 'needs-review': 0, fail: 1, pass: 2, 'not-evaluated': 3 };
+
+function statusPill(status) {
+  return '<span class="status-pill ' + STATUS_CLASS[status] + '">' + STATUS_LABEL[status] + '</span>';
+}
+
+/** One check's status. Mismatches get a Pass/Fail picker; once overridden the
+ * cell reads e.g. "Fail (override · auto: needs review)" so the original
+ * automatic result is never lost (the picker itself is hidden in print). */
+function renderReviewCell(cardId, key, autoStatus, override) {
+  if (autoStatus !== 'needs-review') return statusPill(autoStatus);
+  const stored = (state.reviewOverrides[cardId] || {})[key];
+  const label = override
+    ? statusPill(override === 'PASS' ? 'pass' : 'fail') + '<span class="review-auto"' + (stored ? ' title="Overridden ' + escapeAttr(new Date(stored.at).toLocaleString()) + '"' : '') + '>override (auto: needs review)</span>'
+    : statusPill('needs-review');
+  const select = '<select class="review-select" data-card="' + escapeAttr(cardId) + '" data-key="' + escapeAttr(key) + '" onchange="handleReviewOverrideChange(this)">' +
+    '<option value=""' + (override ? '' : ' selected') + '>' + (override ? 'Clear override' : 'Decide…') + '</option>' +
+    '<option value="PASS"' + (override === 'PASS' ? ' selected' : '') + '>Pass</option>' +
+    '<option value="FAIL"' + (override === 'FAIL' ? ' selected' : '') + '>Fail</option>' +
+    '</select>';
+  return '<span class="review-cell">' + label + select + '</span>';
+}
+
+function setReviewOverrides(cardId, keys, decision) {
+  const card = state.reviewOverrides[cardId] = state.reviewOverrides[cardId] || {};
+  const at = new Date().toISOString();
+  keys.forEach(function (key) {
+    if (decision === 'PASS' || decision === 'FAIL') card[key] = { decision: decision, at: at };
+    else delete card[key];
+  });
+  if (Object.keys(card).length === 0) delete state.reviewOverrides[cardId];
+  saveReviewOverrides();
+  renderSummary();
+}
+function handleReviewOverrideChange(el) {
+  setReviewOverrides(el.getAttribute('data-card'), [el.getAttribute('data-key')], el.value);
+}
+function handleBulkReview(el, decision) {
+  const keys = JSON.parse(el.getAttribute('data-keys'));
+  if (!decision && !confirm('Clear ' + keys.length + ' reviewer override(s) on this card?')) return;
+  setReviewOverrides(el.getAttribute('data-card'), keys, decision);
+}
+
+/** Bulk controls for a card's drilldown: decide every still-pending mismatch at
+ * once (a batch can have dozens), or clear every override on the card. */
+function renderBulkReviewControls(cardId, pendingKeys, overriddenKeys) {
+  if (pendingKeys.length === 0 && overriddenKeys.length === 0) return '';
+  const attrs = function (keys) { return ' data-card="' + escapeAttr(cardId) + '" data-keys="' + escapeAttr(JSON.stringify(keys)) + '"'; };
+  return '<span class="review-bulk">' +
+    (pendingKeys.length ? '<span>' + pendingKeys.length + ' awaiting review:</span>' +
+      '<button class="secondary"' + attrs(pendingKeys) + ' onclick="handleBulkReview(this, \'PASS\')">Pass all</button>' +
+      '<button class="secondary"' + attrs(pendingKeys) + ' onclick="handleBulkReview(this, \'FAIL\')">Fail all</button>' : '') +
+    (overriddenKeys.length ? '<button class="link-btn"' + attrs(overriddenKeys) + ' onclick="handleBulkReview(this, \'\')">Clear ' + overriddenKeys.length + ' override(s)</button>' : '') +
+    '</span>';
+}
+
+/** Card facts line about mismatches + reviewer decisions (also lands in the
+ * copied text digest and PDF, since both read the rendered facts). */
+function reviewFact(counts, label) {
+  if (!counts.mismatchCount) return '';
+  const parts = [];
+  if (counts.overriddenPassCount) parts.push(counts.overriddenPassCount + ' overridden to pass');
+  if (counts.overriddenFailCount) parts.push(counts.overriddenFailCount + ' overridden to fail');
+  if (counts.needsReviewCount) parts.push('<strong>' + counts.needsReviewCount + ' awaiting review</strong>');
+  return counts.mismatchCount + ' ' + (label ? label + ' ' : '') + 'BLQ/NR mismatch(es) — ' + parts.join(', ') + '.';
+}
+
+/** Override keys on one check that are still pending vs already decided. */
+function reviewKeys(perPeptide, prefix, autoField, overrideField) {
+  const out = { pending: [], overridden: [] };
+  perPeptide.forEach(function (r) {
+    if (r[overrideField]) out.overridden.push(prefix + r.overrideKey);
+    else if (r[autoField] === 'needs-review') out.pending.push(prefix + r.overrideKey);
+  });
+  return out;
+}
+
+function reviewColumn(cardId, key, label, prefix, autoField, statusField, overrideField) {
+  return {
+    key: key, label: label,
+    render: function (r) { return renderReviewCell(cardId, prefix + r.overrideKey, r[autoField], r[overrideField]); },
+    sortValue: function (r) { return STATUS_SORT[r[statusField]]; }
+  };
 }
 
 // ---------------------------------------------------------------------
 // Drilldown column definitions
 // ---------------------------------------------------------------------
 
-function duplicateDrilldownColumns() {
+function duplicateDrilldownColumns(cardId) {
   return [
     { key: 'protein', label: 'Protein', render: function (r) { return escapeHtml(r.protein); }, sortValue: function (r) { return r.protein; } },
     { key: 'peptide', label: 'Peptide', render: function (r) { return escapeHtml(r.peptide); }, sortValue: function (r) { return r.peptide; } },
@@ -2486,10 +2624,11 @@ function duplicateDrilldownColumns() {
     { key: 'validCount', label: 'Valid n', render: function (r) { return String(r.validCount); }, sortValue: function (r) { return r.validCount; } },
     { key: 'mean', label: 'Mean', render: function (r) { return formatNum(Calc.mean(Calc.numericValues(r.replicates)), 2); }, sortValue: function (r) { return Calc.mean(Calc.numericValues(r.replicates)); } },
     { key: 'sd', label: 'SD', render: function (r) { return formatNum(Calc.sd(Calc.numericValues(r.replicates)), 2); }, sortValue: function (r) { return Calc.sd(Calc.numericValues(r.replicates)); } },
-    { key: 'intraCv', label: 'Intra-CV%', render: function (r) { return r.intraCv == null ? '<span class="flag-na">N/A</span>' : formatNum(r.intraCv, 1) + '%'; }, sortValue: function (r) { return r.intraCv; } }
+    { key: 'intraCv', label: 'Intra-CV%', render: function (r) { return r.intraCv == null ? '<span class="flag-na">N/A</span>' : formatNum(r.intraCv, 1) + '%'; }, sortValue: function (r) { return r.intraCv; } },
+    reviewColumn(cardId, 'status', 'Result', '', 'autoStatus', 'status', 'override')
   ];
 }
-function rerunDrilldownColumns() {
+function rerunDrilldownColumns(cardId) {
   return [
     { key: 'protein', label: 'Protein', render: function (r) { return escapeHtml(r.protein); }, sortValue: function (r) { return r.protein; } },
     { key: 'peptide', label: 'Peptide', render: function (r) { return escapeHtml(r.peptide); }, sortValue: function (r) { return r.peptide; } },
@@ -2497,10 +2636,12 @@ function rerunDrilldownColumns() {
     { key: 'rerun', label: 'Rerun', render: function (r) { return formatReplicates(r.rerun); }, sortValue: function () { return null; } },
     { key: 'intraCv', label: 'Intra-CV%', render: function (r) { return r.intraCv == null ? '<span class="flag-na">N/A</span>' : formatNum(r.intraCv, 1) + '%'; }, sortValue: function (r) { return r.intraCv; } },
     { key: 'ratio', label: 'Ratio', render: function (r) { return r.ratio == null ? '<span class="flag-na">N/A</span>' : formatNum(r.ratio, 2) + ' (' + r.ratioBucket + ')'; }, sortValue: function (r) { return r.ratio; } },
-    { key: 'interCv', label: 'Inter-CV%', render: function (r) { return r.interCv == null ? '<span class="flag-na">N/A</span>' : formatNum(r.interCv, 1) + '%'; }, sortValue: function (r) { return r.interCv; } }
+    { key: 'interCv', label: 'Inter-CV%', render: function (r) { return r.interCv == null ? '<span class="flag-na">N/A</span>' : formatNum(r.interCv, 1) + '%'; }, sortValue: function (r) { return r.interCv; } },
+    reviewColumn(cardId, 'intraStatus', 'Intra result', 'intra:', 'intraAutoStatus', 'intraStatus', 'intraOverride'),
+    reviewColumn(cardId, 'interStatus', 'Inter result', 'inter:', 'interAutoStatus', 'interStatus', 'interOverride')
   ];
 }
-function poolPlasmaDrilldownColumns() {
+function poolPlasmaDrilldownColumns(cardId) {
   return [
     { key: 'protein', label: 'Protein', render: function (r) { return escapeHtml(r.protein); }, sortValue: function (r) { return r.protein; } },
     { key: 'peptide', label: 'Peptide', render: function (r) { return escapeHtml(r.peptide); }, sortValue: function (r) { return r.peptide; } },
@@ -2508,13 +2649,25 @@ function poolPlasmaDrilldownColumns() {
     { key: 'rerunReplicates', label: 'Side B', render: function (r) { return formatReplicates(r.rerunReplicates); }, sortValue: function () { return null; } },
     { key: 'firstIntraCv', label: 'Side A intra-CV%', render: function (r) { return r.firstIntraCv == null ? '<span class="flag-na">N/A</span>' : formatNum(r.firstIntraCv, 1) + '%'; }, sortValue: function (r) { return r.firstIntraCv; } },
     { key: 'rerunIntraCv', label: 'Side B intra-CV%', render: function (r) { return r.rerunIntraCv == null ? '<span class="flag-na">N/A</span>' : formatNum(r.rerunIntraCv, 1) + '%'; }, sortValue: function (r) { return r.rerunIntraCv; } },
-    { key: 'ratio', label: 'Ratio (B/A)', render: function (r) { return r.ratio == null ? '<span class="flag-na">N/A</span>' : formatNum(r.ratio, 2) + ' (' + r.ratioBucket + ')'; }, sortValue: function (r) { return r.ratio; } }
+    { key: 'ratio', label: 'Ratio (B/A)', render: function (r) { return r.ratio == null ? '<span class="flag-na">N/A</span>' : formatNum(r.ratio, 2) + ' (' + r.ratioBucket + ')'; }, sortValue: function (r) { return r.ratio; } },
+    reviewColumn(cardId, 'status', 'Result', '', 'autoStatus', 'status', 'override')
   ];
 }
 
 // ---------------------------------------------------------------------
 // Card renderers
 // ---------------------------------------------------------------------
+
+function verdictWords(verdict) {
+  if (verdict === 'PASS') return 'passed';
+  if (verdict === 'NEEDS_REVIEW') return 'needs review';
+  return 'FAILED';
+}
+
+function rerunOverallVerdict(decision) {
+  if (decision.recommendation === 'needs-review') return 'NEEDS_REVIEW';
+  return (decision.recommendation === 'escalate-vendor' || decision.recommendation === 'manual-review') ? 'FAIL' : 'PASS';
+}
 
 function renderDuplicateCard(anchorId) {
   const group = derivedGroups('Duplicate')[anchorId];
@@ -2523,20 +2676,23 @@ function renderDuplicateCard(anchorId) {
   const hasVip = group.anchor.vip || group.members.some(function (m) { return m.vip; });
   const c = res.counts;
   const facts = [
-    c.validPeptideCount + ' valid peptide(s) compared (BLQ/NR/error excluded).',
-    'Intra-run CV <strong>' + (res.verdict === 'PASS' ? 'passed' : 'FAILED') + '</strong> — ' + c.cv20 + ' of ' + c.validPeptideCount + ' peptides above the &gt;' + Calc.THRESHOLDS.duplicateCvFailPeptideCount + '% CV threshold.',
-    c.blqMismatchCount > 0 ? c.blqMismatchCount + ' peptide(s) had a BLQ/concentration mismatch.' : ''
+    c.failCount + ' of ' + c.total + ' peptide(s) failed (BLQ/BLQ and NR/NR pairs count as passes; blank/error cells excluded).',
+    'Intra-run CV <strong>' + verdictWords(res.verdict) + '</strong> — ' + c.cv20 + ' of ' + c.validPeptideCount + ' numeric peptides above 20% CV; fails at &gt;' + Calc.THRESHOLDS.duplicateCvFailPeptideCount + ' failing peptides.',
+    reviewFact(c, '')
   ];
   const factsHtml = renderFactsList(facts);
   const countsHtml = renderCountsTable([
     { label: '&gt;10% CV', value: c.cv10, barValue: c.cv10 },
     { label: '&gt;20% CV (fail threshold: &gt;' + Calc.THRESHOLDS.duplicateCvFailPeptideCount + ')', value: c.cv20, barValue: c.cv20, fail: true },
     { label: '&gt;30% CV', value: c.cv30, barValue: c.cv30 },
-    { label: 'BLQ/concentration mismatches', value: c.blqMismatchCount, barValue: c.blqMismatchCount }
+    { label: 'BLQ/NR mismatches awaiting review', value: c.needsReviewCount, barValue: c.needsReviewCount },
+    { label: 'Mismatches overridden (pass / fail)', value: c.overriddenPassCount + ' / ' + c.overriddenFailCount }
   ]);
   const metricsHtml = renderCardMetrics([countsHtml]);
-  const isFlagged = function (row) { return row.excluded || row.blqMismatch || (row.intraCv != null && row.intraCv > Calc.THRESHOLDS.duplicateCvFailPercent); };
-  const drilldownHtml = renderDrilldownTable(cardId, res.perPeptide, duplicateDrilldownColumns(), isFlagged);
+  const isFlagged = function (row) { return row.excluded || row.mismatch || row.status === 'fail'; };
+  const keys = reviewKeys(res.perPeptide, '', 'autoStatus', 'override');
+  const drilldownHtml = renderDrilldownTable(cardId, res.perPeptide, duplicateDrilldownColumns(cardId), isFlagged,
+    renderBulkReviewControls(cardId, keys.pending, keys.overridden));
   return renderCardShell({
     id: cardId,
     title: escapeHtml(group.anchor.sampleId) + vipBadge(hasVip),
@@ -2555,33 +2711,39 @@ function renderRerunSampleCard(anchorId) {
   const hasVip = group.anchor.vip || group.members.some(function (m) { return m.vip; });
   const firstBatch = batchName(group.anchor.batchId);
   const rerunBatch = batchName(group.members[0].batchId);
-  const overallVerdict = (res.decision.recommendation === 'escalate-vendor' || res.decision.recommendation === 'manual-review') ? 'FAIL' : 'PASS';
+  const overallVerdict = rerunOverallVerdict(res.decision);
   const intraCounts = res.batchResult.intraCounts, interCounts = res.batchResult.interCounts;
   const facts = [
-    'Intra-run CV <strong>' + res.decision.intraVerdict + '</strong> — ' + intraCounts.cv20 + '/' + intraCounts.validPeptideCount + ' peptides &gt;20% CV' +
-      (intraCounts.blqMismatchCount > 0 ? ', ' + intraCounts.blqMismatchCount + ' BLQ/concentration mismatch(es)' : '') + '.',
-    'Inter-run CV <strong>' + res.decision.interVerdict + '</strong> — ' + interCounts.cv30 + '/' + interCounts.validPeptideCount + ' peptides &gt;30% CV' +
-      (interCounts.blqMismatchCount > 0 ? ', ' + interCounts.blqMismatchCount + ' BLQ/concentration mismatch(es)' : '') + '.',
+    'Intra-run <strong>' + verdictWords(res.decision.intraVerdict) + '</strong> — ' + intraCounts.failCount + ' of ' + intraCounts.total + ' peptide(s) failed; ' +
+      intraCounts.cv20 + '/' + intraCounts.validPeptideCount + ' numeric peptides &gt;20% CV.',
+    reviewFact(intraCounts, 'intra-run'),
+    'Inter-run <strong>' + verdictWords(res.decision.interVerdict) + '</strong> — ' + interCounts.failCount + ' of ' + interCounts.total + ' peptide(s) failed; ' +
+      interCounts.cv30 + '/' + interCounts.validPeptideCount + ' numeric peptides &gt;30% CV.',
+    reviewFact(interCounts, 'inter-run'),
     res.decision.directionalDrift.flagged ? 'Systematic drift flagged for this sample\'s ratio direction.' : ''
   ];
   const factsHtml = renderFactsList(facts);
   const recommendationHtml = '<p class="recommendation"><strong>Recommendation:</strong> ' + escapeHtml(RECOMMENDATION_LABEL[res.decision.recommendation]) + '</p>';
   const countsHtml = renderCountsTable([
     { label: 'Intra-run &gt;20% CV (fail &gt;' + Calc.THRESHOLDS.rerunIntraFailPeptideCount + ')', value: intraCounts.cv20 + '/' + intraCounts.validPeptideCount, barValue: intraCounts.cv20, fail: true },
-    { label: 'Intra-run BLQ/concentration mismatches', value: intraCounts.blqMismatchCount, barValue: intraCounts.blqMismatchCount },
+    { label: 'Intra-run BLQ/NR mismatches awaiting review', value: intraCounts.needsReviewCount, barValue: intraCounts.needsReviewCount },
     { label: 'Inter-run &gt;30% CV (fail &gt;' + Calc.THRESHOLDS.rerunInterFailPeptideCount + ')', value: interCounts.cv30 + '/' + interCounts.validPeptideCount, barValue: interCounts.cv30, fail: true },
-    { label: 'Inter-run BLQ/concentration mismatches (first-run vs. rerun — always a fail)', value: interCounts.blqMismatchCount, barValue: interCounts.blqMismatchCount },
+    { label: 'Inter-run BLQ/NR mismatches awaiting review (first-run vs. rerun)', value: interCounts.needsReviewCount, barValue: interCounts.needsReviewCount },
+    { label: 'Mismatches overridden (pass / fail)', value: (intraCounts.overriddenPassCount + interCounts.overriddenPassCount) + ' / ' + (intraCounts.overriddenFailCount + interCounts.overriddenFailCount) },
     { label: 'Sample ratio (mean of peptide ratios)' + infoDot('inter-run-cv-definition'), value: formatNum(res.sampleRatio, 2) }
   ]);
   const histogramHtml = renderHistogram(res.batchResult.ratioBuckets);
   const metricsHtml = renderCardMetrics([countsHtml, histogramHtml]);
   const isFlagged = function (row) {
-    return row.excluded || row.intraBlqMismatch || row.interBlqMismatch ||
+    return row.excluded || row.intraMismatch || row.interMismatch || row.intraStatus === 'fail' || row.interStatus === 'fail' ||
       (row.intraCv != null && row.intraCv > Calc.THRESHOLDS.rerunIntraFailPercent) ||
       (row.interCv != null && row.interCv > Calc.THRESHOLDS.rerunInterFailPercent) ||
       (row.ratio != null && (row.ratio < Calc.THRESHOLDS.rerunRatioBandLo || row.ratio >= Calc.THRESHOLDS.rerunRatioBandHi));
   };
-  const drilldownHtml = renderDrilldownTable(cardId, res.batchResult.perPeptide, rerunDrilldownColumns(), isFlagged);
+  const intraKeys = reviewKeys(res.batchResult.perPeptide, 'intra:', 'intraAutoStatus', 'intraOverride');
+  const interKeys = reviewKeys(res.batchResult.perPeptide, 'inter:', 'interAutoStatus', 'interOverride');
+  const drilldownHtml = renderDrilldownTable(cardId, res.batchResult.perPeptide, rerunDrilldownColumns(cardId), isFlagged,
+    renderBulkReviewControls(cardId, intraKeys.pending.concat(interKeys.pending), intraKeys.overridden.concat(interKeys.overridden)));
   return renderCardShell({
     id: cardId,
     title: 'Rerun comparison — ' + escapeHtml(group.anchor.sampleId) + vipBadge(hasVip),
@@ -2602,24 +2764,27 @@ function renderPoolPlasmaCard(anchorId) {
   const partnerLabel = res.partner.sampleId + ' (' + batchName(res.partner.batchId) + ')';
   const c = res.batchResult.counts;
   const facts = [
-    c.validPeptideCount + ' valid peptide(s) compared (BLQ/NR/error excluded).',
-    'Intra-run CV <strong>' + (res.batchResult.verdict === 'PASS' ? 'passed' : 'FAILED') + '</strong> — ' + c.cv30 + ' of ' + c.validPeptideCount + ' peptides above the &gt;' + Calc.THRESHOLDS.poolPlasmaCvFailPeptideCount + '% CV threshold.',
-    c.blqMismatchCount > 0 ? c.blqMismatchCount + ' peptide(s) had a BLQ/concentration mismatch between sides — always counted as a fail.' : ''
+    c.failCount + ' of ' + c.total + ' peptide(s) failed (BLQ/BLQ and NR/NR count as passes; blank/error cells excluded).',
+    'Intra-run CV <strong>' + verdictWords(res.batchResult.verdict) + '</strong> — ' + c.cv30 + ' of ' + c.validPeptideCount + ' numeric peptides above 30% CV; fails at &gt;' + Calc.THRESHOLDS.poolPlasmaCvFailPeptideCount + ' failing peptides.',
+    reviewFact(c, 'between-side')
   ];
   const factsHtml = renderFactsList(facts);
   const countsHtml = renderCountsTable([
     { label: '&gt;30% CV (fail threshold: &gt;' + Calc.THRESHOLDS.poolPlasmaCvFailPeptideCount + ')', value: c.cv30, barValue: c.cv30, fail: true },
-    { label: 'BLQ/concentration mismatches', value: c.blqMismatchCount, barValue: c.blqMismatchCount }
+    { label: 'BLQ/NR mismatches awaiting review', value: c.needsReviewCount, barValue: c.needsReviewCount },
+    { label: 'Mismatches overridden (pass / fail)', value: c.overriddenPassCount + ' / ' + c.overriddenFailCount }
   ]);
   const histogramHtml = renderHistogram(res.batchResult.ratioBuckets);
   const metricsHtml = renderCardMetrics([countsHtml, histogramHtml]);
   const isFlagged = function (row) {
-    return row.blqMismatch ||
+    return row.mismatch || row.status === 'fail' ||
       (row.rerunIntraCv != null && row.rerunIntraCv > Calc.THRESHOLDS.poolPlasmaCvFailPercent) ||
       (row.firstIntraCv != null && row.firstIntraCv > Calc.THRESHOLDS.poolPlasmaCvFailPercent) ||
       (row.ratio != null && (row.ratio < Calc.THRESHOLDS.rerunRatioBandLo || row.ratio >= Calc.THRESHOLDS.rerunRatioBandHi));
   };
-  const drilldownHtml = renderDrilldownTable(cardId, res.batchResult.perPeptide, poolPlasmaDrilldownColumns(), isFlagged);
+  const keys = reviewKeys(res.batchResult.perPeptide, '', 'autoStatus', 'override');
+  const drilldownHtml = renderDrilldownTable(cardId, res.batchResult.perPeptide, poolPlasmaDrilldownColumns(cardId), isFlagged,
+    renderBulkReviewControls(cardId, keys.pending, keys.overridden));
   return renderCardShell({
     id: cardId,
     title: 'Pool plasma — ' + escapeHtml(res.anchor.sampleId) + ' &amp; ' + escapeHtml(res.partner.sampleId),
@@ -2669,7 +2834,8 @@ function renderRerunRollups() {
     const failedSamples = perSampleSummary.filter(function (s) { return s.interVerdict === 'FAIL'; });
     const representativeReasonCode = drift.flagged ? 'SYSTEMATIC_DRIFT' : (failedSamples[0] ? failedSamples[0].reasonCode : 'INTRA_PASS_INTER_PASS');
     const sentence = Calc.summarySentence('rerun', {}, { reasonCode: representativeReasonCode, interVerdict: failedSamples.length ? 'FAIL' : 'PASS' }, perSampleSummary);
-    const overallVerdict = (escalation.flagged || failedSamples.length > 0) ? 'FAIL' : 'PASS';
+    const anyPendingReview = group.some(function (res) { return rerunOverallVerdict(res.decision) === 'NEEDS_REVIEW'; });
+    const overallVerdict = (escalation.flagged || failedSamples.length > 0) ? 'FAIL' : (anyPendingReview ? 'NEEDS_REVIEW' : 'PASS');
     const flagPills = [
       escalation.flagged ? '<span class="flag-pill">Vendor escalation — ' + Math.round(escalation.failFraction * 100) + '% of duplicates failed intra-run CV' + infoDot('directional-drift-fraction') + '</span>' : '',
       drift.flagged ? '<span class="flag-pill">Systematic drift — ' + Math.round(drift.fraction * 100) + '% of samples shifted ' + drift.direction + infoDot('directional-drift-fraction') + '</span>' : ''
