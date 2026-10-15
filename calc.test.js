@@ -590,9 +590,9 @@ test('MIN_SAMPLES_FOR_BATCH_SIGNAL guard: exactly at the minimum still evaluates
 // ---------------------------------------------------------------------
 
 test('summarySentence: duplicate PASS wording', function () {
-  const batchResult = { verdict: 'PASS', counts: { cv20: 3, validPeptideCount: 97 } };
+  const batchResult = { verdict: 'PASS', counts: { overCutoff: 3, validPeptideCount: 97 } };
   const s = Calc.summarySentence('duplicate', batchResult);
-  assert.strictEqual(s, 'Intra-run CV passed (3/97 peptides >20% CV, threshold is >20).');
+  assert.strictEqual(s, 'Intra-run CV passed (3/97 peptides >20% CV; fails at >20 peptides).');
 });
 
 test('summarySentence: duplicate wording reports mismatches with their review state', function () {
@@ -601,46 +601,46 @@ test('summarySentence: duplicate wording reports mismatches with their review st
   const overrides = {};
   overrides[Calc.overrideKey(rows[0])] = 'PASS';
   const s = Calc.summarySentence('duplicate', Calc.duplicateAnalysis(rows, overrides));
-  assert.strictEqual(s, 'Intra-run CV passed (0/0 peptides >20% CV, threshold is >20); 2 peptide(s) had a BLQ/NR mismatch (one replicate BLQ/NR, another not): 1 overridden to pass, 1 awaiting review.');
+  assert.strictEqual(s, 'Intra-run CV passed (0/0 peptides >20% CV; fails at >20 peptides); 2 peptide(s) had a BLQ/NR mismatch (one replicate BLQ/NR, another not): 1 overridden to pass, 1 awaiting review.');
 });
 
 test('summarySentence: poolPlasma FAIL wording', function () {
-  const batchResult = { verdict: 'FAIL', counts: { cv30: 25, validPeptideCount: 98 } };
+  const batchResult = { verdict: 'FAIL', counts: { overCutoff: 25, validPeptideCount: 98 } };
   const s = Calc.summarySentence('poolPlasma', batchResult);
-  assert.strictEqual(s, 'Pool plasma intra-run CV FAILED (25/98 peptides >30% CV, threshold is >20).');
+  assert.strictEqual(s, 'Pool plasma within-batch CV FAILED (25/98 peptides >30% CV; fails at >20 peptides).');
 });
 
 test('summarySentence: rerun single-sample-failed wording matches brief style', function () {
   const decision = { reasonCode: 'INTRA_PASS_INTER_FAIL', interVerdict: 'FAIL' };
   const perSampleSummary = [
-    { sampleId: '473G835', interVerdict: 'FAIL', interCv20Count: 63, intraVerdict: 'PASS' }
+    { sampleId: '473G835', interVerdict: 'FAIL', interOverCutoffCount: 63, intraVerdict: 'PASS' }
   ];
-  for (let i = 0; i < 10; i++) perSampleSummary.push({ sampleId: 'S' + i, interVerdict: 'PASS', interCv20Count: 2, intraVerdict: 'PASS' });
+  for (let i = 0; i < 10; i++) perSampleSummary.push({ sampleId: 'S' + i, interVerdict: 'PASS', interOverCutoffCount: 2, intraVerdict: 'PASS' });
   const s = Calc.summarySentence('rerun', {}, decision, perSampleSummary);
   assert.strictEqual(
     s,
-    'Inter-run CV passed for 10/11 samples; only 473G835 (63 peptides >20% CV) failed, despite passing intra-run CV, indicating a plate-to-plate shift rather than duplicate imprecision.'
+    'Inter-run CV passed for 10/11 samples; only 473G835 (63 peptides >30% inter-run CV) failed, despite passing intra-run CV, indicating a plate-to-plate shift rather than duplicate imprecision.'
   );
 });
 
 test('summarySentence: rerun failed sample WITHOUT a "despite passing intra" clause still reads grammatically (comma before the reason)', function () {
   const decision = { reasonCode: 'INTRA_FAIL_INTER_FAIL', interVerdict: 'FAIL' };
   const perSampleSummary = [
-    { sampleId: 'X1', interVerdict: 'FAIL', interCv20Count: 40, intraVerdict: 'FAIL' },
-    { sampleId: 'X2', interVerdict: 'PASS', interCv20Count: 1, intraVerdict: 'PASS' }
+    { sampleId: 'X1', interVerdict: 'FAIL', interOverCutoffCount: 40, intraVerdict: 'FAIL' },
+    { sampleId: 'X2', interVerdict: 'PASS', interOverCutoffCount: 1, intraVerdict: 'PASS' }
   ];
   const s = Calc.summarySentence('rerun', {}, decision, perSampleSummary);
   assert.strictEqual(
     s,
-    'Inter-run CV passed for 1/2 samples; only X1 (40 peptides >20% CV) failed, both intra-run and inter-run CV failed; flagging for manual review rather than an automatic recommendation.'
+    'Inter-run CV passed for 1/2 samples; only X1 (40 peptides >30% inter-run CV) failed, both intra-run and inter-run CV failed; flagging for manual review rather than an automatic recommendation.'
   );
 });
 
 test('summarySentence: rerun with zero failed samples uses a capitalized closing sentence (no dangling lowercase after a period)', function () {
   const decision = { reasonCode: 'INTRA_PASS_INTER_PASS', interVerdict: 'PASS' };
   const perSampleSummary = [
-    { sampleId: 'Y1', interVerdict: 'PASS', interCv20Count: 1, intraVerdict: 'PASS' },
-    { sampleId: 'Y2', interVerdict: 'PASS', interCv20Count: 0, intraVerdict: 'PASS' }
+    { sampleId: 'Y1', interVerdict: 'PASS', interOverCutoffCount: 1, intraVerdict: 'PASS' },
+    { sampleId: 'Y2', interVerdict: 'PASS', interOverCutoffCount: 0, intraVerdict: 'PASS' }
   ];
   const s = Calc.summarySentence('rerun', {}, decision, perSampleSummary);
   assert.strictEqual(
@@ -652,7 +652,7 @@ test('summarySentence: rerun with zero failed samples uses a capitalized closing
 test('summarySentence: rerun with >2 failed samples uses the capitalized systematic-drift closing sentence', function () {
   const decision = { reasonCode: 'SYSTEMATIC_DRIFT', interVerdict: 'FAIL' };
   const perSampleSummary = ['A', 'B', 'C'].map(function (id) {
-    return { sampleId: id, interVerdict: 'FAIL', interCv20Count: 30, intraVerdict: 'PASS' };
+    return { sampleId: id, interVerdict: 'FAIL', interOverCutoffCount: 30, intraVerdict: 'PASS' };
   });
   const s = Calc.summarySentence('rerun', {}, decision, perSampleSummary);
   assert.strictEqual(
@@ -725,19 +725,75 @@ test('parseBarcodePrefix: no recognized prefix -> letter/run null, bareId is the
 });
 
 // ---------------------------------------------------------------------
-// Guard: Xukun confirmed (Aug 7, 2026) both CV thresholds stay fixed as-is —
-// duplicate/VIP at 20%, pool plasma at 30%, no dynamic scaling. Never "fix"
-// this inconsistency without re-confirming with her first.
+// Guard: Xukun confirmed (Aug 7, 2026) the CV thresholds stay fixed as-is —
+// duplicate/VIP at 20%, pool plasma at 30%, no dynamic scaling — and inter-run
+// is 30% per the written criteria (decision 2026-10-15; the manual sheet's 20%
+// formula was an error). Never change these without re-confirming first.
 // ---------------------------------------------------------------------
 
-test('THRESHOLDS guard: duplicate/VIP uses 20% CV, pool plasma uses 30% CV (confirmed intentional, fixed, not scaled)', function () {
-  assert.strictEqual(Calc.THRESHOLDS.duplicateCvFailPercent, 20);
-  assert.strictEqual(Calc.THRESHOLDS.poolPlasmaCvFailPercent, 30);
+test('CV_GATES guard: intra-run 20%, inter-run 30%, pool plasma 30%, each failing at >20 peptides', function () {
+  assert.deepStrictEqual(
+    Object.keys(Calc.CV_GATES).map(function (k) { return [k, Calc.CV_GATES[k].cvPercent, Calc.CV_GATES[k].maxFailingPeptides]; }),
+    [['intraRun', 20, 20], ['interRun', 30, 20], ['poolPlasma', 30, 20]]
+  );
 });
 
-test('ASSUMPTIONS only lists genuinely open items (resolved Aug 7 items are not re-flagged)', function () {
+test('ASSUMPTIONS only lists genuinely open items (resolved items are not re-flagged)', function () {
   const ids = Calc.ASSUMPTIONS.map(function (a) { return a.id; });
-  assert.deepStrictEqual(ids.sort(), ['directional-drift-fraction', 'inter-run-cv-definition']);
+  assert.deepStrictEqual(ids.sort(), ['directional-drift-fraction']);
+});
+
+// ---------------------------------------------------------------------
+// UNI-777: intra-run and inter-run are separate gates
+// ---------------------------------------------------------------------
+
+function rerunRow(peptide, firstRun, rerun) {
+  return Object.assign({}, F5_ROW, { peptide: peptide, firstRun: firstRun.map(Calc.parseValue), rerun: rerun.map(Calc.parseValue) });
+}
+
+test('rerunAnalysis: an inter-run CV between 20% and 30% passes (inter-run gate is 30%, unlike the manual sheet)', function () {
+  // first 100 vs rerun mean 140 -> 2-point CV = 23.6%
+  const p = Calc.rerunAnalysis([rerunRow('P', ['100'], ['140', '140'])]).perPeptide[0];
+  assert.ok(p.interCv > 20 && p.interCv < 30);
+  assert.strictEqual(p.interStatus, 'pass');
+});
+
+test('rerunAnalysis: the same 23.6% CV within the rerun replicates fails intra-run (intra-run gate is 20%)', function () {
+  // 100 vs 140 as two rerun replicates -> CV = 23.6%
+  const p = Calc.rerunAnalysis([rerunRow('P', ['120'], ['100', '140'])]).perPeptide[0];
+  assert.ok(p.intraCv > 20 && p.intraCv < 30);
+  assert.strictEqual(p.intraStatus, 'fail');
+});
+
+test('rerunAnalysis: counts carry which gate they belong to, with >10/20/30% shown for both', function () {
+  const r = Calc.rerunAnalysis([rerunRow('P', ['100'], ['100', '140'])]);
+  assert.strictEqual(r.intraCounts.gate, 'intraRun');
+  assert.strictEqual(r.interCounts.gate, 'interRun');
+  ['cv10', 'cv20', 'cv30', 'overCutoff'].forEach(function (k) {
+    assert.strictEqual(typeof r.intraCounts[k], 'number');
+    assert.strictEqual(typeof r.interCounts[k], 'number');
+  });
+  assert.strictEqual(r.intraCounts.overCutoff, r.intraCounts.cv20);
+  assert.strictEqual(r.interCounts.overCutoff, r.interCounts.cv30);
+});
+
+test('rerunDecision: a single-replicate rerun shows intra-run as N/A and is decided on inter-run only', function () {
+  const rows = [rerunRow('P1', ['100'], ['102']), rerunRow('P2', ['50'], ['51'])];
+  const r = Calc.rerunAnalysis(rows);
+  assert.strictEqual(r.intraCounts.total, 0);
+  const d = Calc.rerunDecision(r.intraCounts, r.interCounts, r.ratioBuckets, []);
+  assert.strictEqual(d.intraVerdict, 'N/A');
+  assert.strictEqual(d.interVerdict, 'PASS');
+  assert.strictEqual(d.recommendation, 'use-first-run');
+  assert.strictEqual(d.reasonCode, 'INTRA_NA_INTER_PASS');
+});
+
+test('rerunDecision: a single-replicate rerun that fails inter-run goes to manual review (no way to tell which run is the outlier)', function () {
+  const d = Calc.rerunDecision({ total: 0, failPeptideCount: 0 }, { total: 100, failPeptideCount: 25 }, {}, []);
+  assert.strictEqual(d.intraVerdict, 'N/A');
+  assert.strictEqual(d.interVerdict, 'FAIL');
+  assert.strictEqual(d.recommendation, 'manual-review');
+  assert.strictEqual(d.reasonCode, 'INTRA_NA_INTER_FAIL');
 });
 
 test('CATEGORY_VOCABULARY: single-select category list matches Xukun\'s locked-in model', function () {

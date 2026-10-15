@@ -327,21 +327,30 @@
   }
 
   /**
-   * Every magic number used by the analysis engine, in one place, so the UI can
-   * render each threshold next to its "unconfirmed with Xukun" flag from a single
-   * source of truth (see ASSUMPTIONS below).
+   * The CV acceptance gates — the single place to change a threshold. Each gate
+   * has two parameters, matching the manual sheet's
+   * =IF(COUNTIFS(CV,">cvPercent")<=maxFailingPeptides,"PASS","FAIL"):
+   *   cvPercent          — a peptide fails when its CV is strictly above this
+   *   maxFailingPeptides — the check fails when MORE than this many peptides fail
+   *                        (an absolute count, even though the number of evaluable
+   *                        peptides varies per sample)
+   * Every label, summary sentence and export reads from here.
    */
+  const CV_GATES = {
+    // Duplicates/VIP within one run, and a rerun's own replicates.
+    intraRun: { label: 'Intra-run CV', cvPercent: 20, maxFailingPeptides: 20 },
+    // First-run vs rerun mean. 30% per the written acceptance criteria (decision
+    // 2026-10-15) — the manual sheet's formula uses 20%, which was an error, so
+    // the tool will differ from the sheet where inter-run CV is 20-30%.
+    interRun: { label: 'Inter-run CV', cvPercent: 30, maxFailingPeptides: 20 },
+    // Pool plasma replicates within one batch.
+    poolPlasma: { label: 'Pool plasma within-batch CV', cvPercent: 30, maxFailingPeptides: 20 }
+  };
+
+  /** The remaining (non-CV) magic numbers used by the analysis engine. */
   const THRESHOLDS = {
-    duplicateCvFailPeptideCount: 20,   // >20 biomarkers CV>20% -> FAIL (duplicate/VIP)
-    duplicateCvFailPercent: 20,
-    rerunIntraFailPeptideCount: 20,    // same peptide-count cutoff reused for rerun intra check
-    rerunIntraFailPercent: 20,
-    rerunInterFailPeptideCount: 20,
-    rerunInterFailPercent: 30,
     rerunRatioBandLo: 0.8,
     rerunRatioBandHi: 1.2,
-    poolPlasmaCvFailPeptideCount: 20,  // SAME peptide-count cutoff, DIFFERENT % cutoff than duplicate/VIP
-    poolPlasmaCvFailPercent: 30,
     directionalDriftFraction: 0.6      // >=60% of samples shifting the same ratio direction -> batch drift flag
   };
 
@@ -356,14 +365,12 @@
    * both CV thresholds are locked in as intentionally different, the tag/category
    * vocabulary is locked in, and barcode linking is now always an explicit user
    * choice rather than a heuristic, so there's no "auto-match confidence" to flag).
+   * The inter-run CV definition (2-point CV of first-run and rerun mean) was
+   * confirmed against the July 3A workbook formulas in Oct 2026 and removed too.
    * The UI reads this array as the single source of truth for every caveat banner
    * and inline tooltip — never duplicate this text elsewhere.
    */
   const ASSUMPTIONS = [
-    {
-      id: 'inter-run-cv-definition',
-      text: 'Inter-run CV is computed as the CV of the two group means — cv([mean(first-run), mean(rerun)]) — rather than pooling every individual replicate together. The brief\'s wording ("CV between first-run and mean(rerun)") is a little ambiguous; this is the interpretation this build uses.'
-    },
     {
       id: 'directional-drift-fraction',
       text: 'The directional-drift and batch-level-escalation flags trigger at a 60% same-direction / same-fail threshold, and only once a batch has at least ' + MIN_SAMPLES_FOR_BATCH_SIGNAL + ' samples (below that, "most/all samples" isn\'t a meaningful signal). Xukun asked that systematic drift be auto-flagged rather than left as a chart to eyeball; the exact percentage/minimum-batch-size cutoffs are this build\'s placeholders, not confirmed numbers.'
@@ -385,19 +392,23 @@
   // ---------------------------------------------------------------------
 
   /**
-   * Count how many of a set of per-peptide CV values exceed each of 10/20/30%.
+   * Count how many of a set of per-peptide CV values exceed each of 10/20/30%
+   * (informational, for parity with the manual sheet), plus how many exceed the
+   * gate's own cutoff (the count that actually drives pass/fail).
    * @param {(number|null)[]} cvValues
-   * @returns {{cv10:number, cv20:number, cv30:number}}
+   * @param {{cvPercent:number}} [gate]
+   * @returns {{cv10:number, cv20:number, cv30:number, overCutoff:number}}
    */
-  function countCvThresholds(cvValues) {
-    let cv10 = 0, cv20 = 0, cv30 = 0;
+  function countCvThresholds(cvValues, gate) {
+    let cv10 = 0, cv20 = 0, cv30 = 0, overCutoff = 0;
     cvValues.forEach(function (cv) {
       if (cv == null) return;
       if (cv > 10) cv10++;
       if (cv > 20) cv20++;
       if (cv > 30) cv30++;
+      if (gate && cv > gate.cvPercent) overCutoff++;
     });
-    return { cv10: cv10, cv20: cv20, cv30: cv30 };
+    return { cv10: cv10, cv20: cv20, cv30: cv30, overCutoff: overCutoff };
   }
 
   /**
@@ -428,7 +439,7 @@
       // NR vs value, BLQ vs NR) are neither passed nor failed automatically —
       // they need a reviewer's decision.
       const agreement = replicateAgreement(row.replicates);
-      const autoStatus = autoCheckStatus(agreement, intraCv, THRESHOLDS.duplicateCvFailPercent);
+      const autoStatus = autoCheckStatus(agreement, intraCv, CV_GATES.intraRun.cvPercent);
       const key = overrideKey(row);
       const resolved = applyOverride(autoStatus, overrides[key]);
       return {
@@ -444,17 +455,18 @@
       };
     });
 
-    const cvCounts = countCvThresholds(perPeptide.map(function (p) { return p.intraCv; }));
+    const cvCounts = countCvThresholds(perPeptide.map(function (p) { return p.intraCv; }), CV_GATES.intraRun);
     const validPeptideCount = perPeptide.filter(function (p) { return p.validCount >= 2; }).length;
     const mismatchCount = perPeptide.filter(function (p) { return p.mismatch; }).length;
     const status = statusCounts(perPeptide);
-    const verdict = resolveVerdict(status.failCount, status.needsReviewCount, THRESHOLDS.duplicateCvFailPeptideCount);
+    const verdict = resolveVerdict(status.failCount, status.needsReviewCount, CV_GATES.intraRun.maxFailingPeptides);
 
     return {
       type: 'duplicate',
       perPeptide: perPeptide,
       counts: Object.assign({
-        cv10: cvCounts.cv10, cv20: cvCounts.cv20, cv30: cvCounts.cv30, validPeptideCount: validPeptideCount,
+        gate: 'intraRun',
+        cv10: cvCounts.cv10, cv20: cvCounts.cv20, cv30: cvCounts.cv30, overCutoff: cvCounts.overCutoff, validPeptideCount: validPeptideCount,
         mismatchCount: mismatchCount, failPeptideCount: status.failCount
       }, status),
       verdict: verdict
@@ -462,9 +474,9 @@
   }
 
   /**
-   * Inter-run CV, defined as the CV of the two group means (see ASSUMPTIONS:
-   * 'inter-run-cv-definition') — i.e. plate-to-plate variability, not a pooled
-   * intra+inter conflation.
+   * Inter-run CV, defined as the CV of the two group means — plate-to-plate
+   * variability, not a pooled intra+inter conflation. Matches the manual sheet's
+   * =STDEV(first, rerunMean)/AVERAGE(first, rerunMean) (confirmed Oct 2026).
    * @param {number[]} firstNumeric
    * @param {number[]} rerunNumeric
    * @returns {number|null}
@@ -526,8 +538,8 @@
       const intraAgreement = replicateAgreement(row.rerun);
       const interAgreement = interRunAgreement(row.firstRun, row.rerun);
       const key = overrideKey(row);
-      const intraAuto = autoCheckStatus(intraAgreement, intraCv, THRESHOLDS.rerunIntraFailPercent);
-      const interAuto = autoCheckStatus(interAgreement, interCv, THRESHOLDS.rerunInterFailPercent);
+      const intraAuto = autoCheckStatus(intraAgreement, intraCv, CV_GATES.intraRun.cvPercent);
+      const interAuto = autoCheckStatus(interAgreement, interCv, CV_GATES.interRun.cvPercent);
       const intra = applyOverride(intraAuto, overrides['intra:' + key]);
       const inter = applyOverride(interAuto, overrides['inter:' + key]);
       return {
@@ -545,8 +557,8 @@
       };
     });
 
-    const intraCounts = countCvThresholds(perPeptide.map(function (p) { return p.intraCv; }));
-    const interCounts = countCvThresholds(perPeptide.map(function (p) { return p.interCv; }));
+    const intraCounts = countCvThresholds(perPeptide.map(function (p) { return p.intraCv; }), CV_GATES.intraRun);
+    const interCounts = countCvThresholds(perPeptide.map(function (p) { return p.interCv; }), CV_GATES.interRun);
     const intraValidPeptideCount = perPeptide.filter(function (p) { return p.rerunValidCount >= 2; }).length;
     const interValidPeptideCount = perPeptide.filter(function (p) { return p.ratio != null; }).length;
     const intraMismatchCount = perPeptide.filter(function (p) { return p.intraMismatch; }).length;
@@ -564,11 +576,13 @@
       type: 'rerun',
       perPeptide: perPeptide,
       intraCounts: Object.assign({
-        cv10: intraCounts.cv10, cv20: intraCounts.cv20, cv30: intraCounts.cv30, validPeptideCount: intraValidPeptideCount,
+        gate: 'intraRun',
+        cv10: intraCounts.cv10, cv20: intraCounts.cv20, cv30: intraCounts.cv30, overCutoff: intraCounts.overCutoff, validPeptideCount: intraValidPeptideCount,
         mismatchCount: intraMismatchCount, failPeptideCount: intraStatus.failCount
       }, intraStatus),
       interCounts: Object.assign({
-        cv10: interCounts.cv10, cv20: interCounts.cv20, cv30: interCounts.cv30, validPeptideCount: interValidPeptideCount,
+        gate: 'interRun',
+        cv10: interCounts.cv10, cv20: interCounts.cv20, cv30: interCounts.cv30, overCutoff: interCounts.overCutoff, validPeptideCount: interValidPeptideCount,
         mismatchCount: interMismatchCount, failPeptideCount: interStatus.failCount
       }, interStatus),
       ratioBuckets: ratioBuckets
@@ -612,8 +626,8 @@
       // any mix (within a side or between sides) needs a reviewer's decision.
       const agreement = replicateAgreement((firstRow.poolReplicates || []).concat(rerunRow.poolReplicates || []));
       // Intra-run CV check is evaluated against the rerun-batch pool plasma
-      // replicates (the batch being qualified), at the pool-plasma 30% threshold.
-      const autoStatus = autoCheckStatus(agreement, rerunIntraCv, THRESHOLDS.poolPlasmaCvFailPercent);
+      // replicates (the batch being qualified), at the pool-plasma gate.
+      const autoStatus = autoCheckStatus(agreement, rerunIntraCv, CV_GATES.poolPlasma.cvPercent);
       const key = overrideKey(firstRow);
       const resolved = applyOverride(autoStatus, overrides[key]);
       perPeptide.push({
@@ -627,11 +641,11 @@
       });
     }
 
-    const cvCounts = countCvThresholds(perPeptide.map(function (p) { return p.rerunIntraCv; }));
+    const cvCounts = countCvThresholds(perPeptide.map(function (p) { return p.rerunIntraCv; }), CV_GATES.poolPlasma);
     const validPeptideCount = perPeptide.filter(function (p) { return p.rerunIntraCv != null; }).length;
     const mismatchCount = perPeptide.filter(function (p) { return p.mismatch; }).length;
     const status = statusCounts(perPeptide);
-    const verdict = resolveVerdict(status.failCount, status.needsReviewCount, THRESHOLDS.poolPlasmaCvFailPeptideCount);
+    const verdict = resolveVerdict(status.failCount, status.needsReviewCount, CV_GATES.poolPlasma.maxFailingPeptides);
 
     const ratioBuckets = {};
     RATIO_BUCKETS.forEach(function (b) { ratioBuckets[b.label] = 0; });
@@ -643,7 +657,8 @@
       type: 'poolPlasma',
       perPeptide: perPeptide,
       counts: Object.assign({
-        cv10: cvCounts.cv10, cv20: cvCounts.cv20, cv30: cvCounts.cv30, validPeptideCount: validPeptideCount,
+        gate: 'poolPlasma',
+        cv10: cvCounts.cv10, cv20: cvCounts.cv20, cv30: cvCounts.cv30, overCutoff: cvCounts.overCutoff, validPeptideCount: validPeptideCount,
         mismatchCount: mismatchCount, failPeptideCount: status.failCount
       }, status),
       ratioBuckets: ratioBuckets,
@@ -725,22 +740,26 @@
    * @param {{cv10:number, cv20:number, cv30:number, validPeptideCount:number}} interCounts
    * @param {Record<string, number>} ratioBuckets - label -> count, from rerunAnalysis
    * @param {{sampleId:string, ratio:number}[]} [perSampleRatios] - used only for the directional-drift check
-   * @returns {{intraVerdict:('PASS'|'FAIL'|'NEEDS_REVIEW'), interVerdict:('PASS'|'FAIL'|'NEEDS_REVIEW'), recommendation:('use-first-run'|'use-rerun'|'manual-review'|'needs-review'|'escalate-vendor'), directionalDrift:Object, reasonCode:string}}
+   * @returns {{intraVerdict:('PASS'|'FAIL'|'NEEDS_REVIEW'|'N/A'), interVerdict:('PASS'|'FAIL'|'NEEDS_REVIEW'), recommendation:('use-first-run'|'use-rerun'|'manual-review'|'needs-review'|'escalate-vendor'), directionalDrift:Object, reasonCode:string}}
    */
   function rerunDecision(intraCounts, interCounts, ratioBuckets, perSampleRatios) {
-    // failPeptideCount folds in Xukun's BLQ/concentration-mismatch rule
-    // alongside the CV% count; fall back to raw cv20/cv30 for callers that
-    // pass in counts objects from before that field existed.
+    // failPeptideCount folds in reviewer overrides alongside the CV% count; fall
+    // back to the raw >cutoff count for callers that pass in bare counts objects.
     const intraFailCount = intraCounts.failPeptideCount != null ? intraCounts.failPeptideCount : intraCounts.cv20;
     const interFailCount = interCounts.failPeptideCount != null ? interCounts.failPeptideCount : interCounts.cv30;
-    const intraVerdict = resolveVerdict(intraFailCount, intraCounts.needsReviewCount, THRESHOLDS.rerunIntraFailPeptideCount);
+    // A rerun with a single replicate has nothing to compare intra-run, so (as in
+    // the manual sheet) intra-run is N/A and only the inter-run check applies.
+    const intraNotApplicable = intraCounts.total === 0;
+    const intraVerdict = intraNotApplicable
+      ? 'N/A'
+      : resolveVerdict(intraFailCount, intraCounts.needsReviewCount, CV_GATES.intraRun.maxFailingPeptides);
 
     const totalBuckets = Object.keys(ratioBuckets || {}).reduce(function (sum, k) { return sum + ratioBuckets[k]; }, 0);
     const inBand = acceptableBandCount(ratioBuckets || {});
     // "ratio in band" = majority of peptides land in the 0.8-1.2 acceptable band.
     const ratioInBand = totalBuckets === 0 ? true : (inBand / totalBuckets) >= 0.5;
     const interVerdict = ratioInBand
-      ? resolveVerdict(interFailCount, interCounts.needsReviewCount, THRESHOLDS.rerunInterFailPeptideCount)
+      ? resolveVerdict(interFailCount, interCounts.needsReviewCount, CV_GATES.interRun.maxFailingPeptides)
       : 'FAIL';
     const intraFail = intraVerdict === 'FAIL';
     const interFail = interVerdict === 'FAIL';
@@ -755,6 +774,9 @@
     //   intra FAIL, inter PASS -> use FIRST-RUN (the rerun replicates disagree with each other, so neither is
     //                             trustworthy even though their average happens to land near first-run — matches 228G789)
     //   intra FAIL, inter FAIL -> not covered by Xukun's examples; flag for manual review, don't auto-decide
+    //   intra N/A,  inter PASS -> single rerun replicate agrees with first-run; report first-run
+    //   intra N/A,  inter FAIL -> single rerun replicate disagrees, and with no rerun duplicate there's no way
+    //                             to tell which run is the outlier; manual review
     // "escalate-vendor" is reserved for the separate batch-wide signal in batchLevelEscalation() below,
     // not returned from this per-sample table.
     // Unreviewed BLQ/NR mismatches that could still flip either verdict hold the
@@ -763,6 +785,9 @@
     if (intraVerdict === 'NEEDS_REVIEW' || interVerdict === 'NEEDS_REVIEW') {
       recommendation = 'needs-review';
       reasonCode = 'PENDING_REVIEW';
+    } else if (intraNotApplicable) {
+      recommendation = interFail ? 'manual-review' : 'use-first-run';
+      reasonCode = interFail ? 'INTRA_NA_INTER_FAIL' : 'INTRA_NA_INTER_PASS';
     } else if (!intraFail && !interFail) {
       recommendation = 'use-first-run';
       reasonCode = 'INTRA_PASS_INTER_PASS';
@@ -799,6 +824,8 @@
     INTRA_FAIL_INTER_PASS: 'intra-run CV failed, so the rerun replicates disagree with each other and neither individual value can be trusted, even though their average happens to land near first-run; using first-run for reporting, with the rerun marked as research-only.',
     INTRA_PASS_INTER_FAIL: 'indicating a plate-to-plate shift rather than duplicate imprecision.',
     INTRA_FAIL_INTER_FAIL: 'both intra-run and inter-run CV failed; flagging for manual review rather than an automatic recommendation.',
+    INTRA_NA_INTER_PASS: 'the rerun has a single replicate, so only the inter-run check applies; it passed, so using first-run data for reporting, with the rerun marked as research-only.',
+    INTRA_NA_INTER_FAIL: 'the rerun has a single replicate, so there\'s no intra-run check to show which run is the outlier; flagging for manual review.',
     PENDING_REVIEW: 'BLQ/NR mismatches still awaiting review could change the outcome; resolve them before using a recommendation.',
     SYSTEMATIC_DRIFT: 'indicating a systematic drift across the batch rather than isolated sample issues; recommend escalating to the vendor.'
   };
@@ -809,6 +836,13 @@
     if (verdict === 'PASS') return 'passed';
     if (verdict === 'NEEDS_REVIEW') return 'needs review';
     return 'FAILED';
+  }
+
+  /** e.g. "Intra-run CV passed (3/97 peptides >20% CV; fails at >20 peptides)" */
+  function gateClause(gate, verdict, counts) {
+    return gate.label + ' ' + verdictWord(verdict) +
+      ' (' + counts.overCutoff + '/' + counts.validPeptideCount + ' peptides >' + gate.cvPercent + '% CV; fails at >' +
+      gate.maxFailingPeptides + ' peptides)';
   }
 
   /** "; 3 peptide(s) had a BLQ/NR mismatch ...: 1 overridden to pass, 2 awaiting review" — empty when none. */
@@ -827,22 +861,18 @@
    * @param {'duplicate'|'rerun'|'poolPlasma'} type
    * @param {Object} batchResult - output of the relevant *Analysis() function
    * @param {Object} [decision] - output of rerunDecision(), required when type === 'rerun'
-   * @param {{sampleId:string, interCv20Count:number, intraVerdict:string}[]} [perSampleSummary] - used for rerun's "only X failed" clause
+   * @param {{sampleId:string, interOverCutoffCount:number, intraVerdict:string}[]} [perSampleSummary] - used for rerun's "only X failed" clause
    * @returns {string}
    */
   function summarySentence(type, batchResult, decision, perSampleSummary) {
     if (type === 'duplicate') {
       const c = batchResult.counts;
-      return 'Intra-run CV ' + verdictWord(batchResult.verdict) +
-        ' (' + c.cv20 + '/' + c.validPeptideCount + ' peptides >20% CV, threshold is >' +
-        THRESHOLDS.duplicateCvFailPeptideCount + ')' + mismatchClause(c, '(one replicate BLQ/NR, another not)') + '.';
+      return gateClause(CV_GATES.intraRun, batchResult.verdict, c) + mismatchClause(c, '(one replicate BLQ/NR, another not)') + '.';
     }
 
     if (type === 'poolPlasma') {
       const c = batchResult.counts;
-      return 'Pool plasma intra-run CV ' + verdictWord(batchResult.verdict) +
-        ' (' + c.cv30 + '/' + c.validPeptideCount + ' peptides >30% CV, threshold is >' +
-        THRESHOLDS.poolPlasmaCvFailPeptideCount + ')' + mismatchClause(c, 'between sides') + '.';
+      return gateClause(CV_GATES.poolPlasma, batchResult.verdict, c) + mismatchClause(c, 'between sides') + '.';
     }
 
     if (type === 'rerun') {
@@ -853,17 +883,17 @@
       const passCount = total - failedSamples.length - reviewCount;
 
       let sentence = total > 0
-        ? 'Inter-run CV passed for ' + passCount + '/' + total + ' samples' +
+        ? CV_GATES.interRun.label + ' passed for ' + passCount + '/' + total + ' samples' +
           (reviewCount > 0 ? '; ' + reviewCount + ' awaiting review of BLQ/NR mismatches' : '')
-        : 'Inter-run CV ' + verdictWord(decision.interVerdict);
+        : CV_GATES.interRun.label + ' ' + verdictWord(decision.interVerdict);
 
       if (failedSamples.length > 0 && failedSamples.length <= 2) {
         const names = failedSamples.map(function (s) {
-          return s.sampleId + ' (' + s.interCv20Count + ' peptides >20% CV)';
+          return s.sampleId + ' (' + s.interOverCutoffCount + ' peptides >' + CV_GATES.interRun.cvPercent + '% inter-run CV)';
         }).join(' and ');
         sentence += '; only ' + names + ' failed';
         if (failedSamples[0].intraVerdict === 'PASS') {
-          sentence += ', despite passing intra-run CV';
+          sentence += ', despite passing ' + CV_GATES.intraRun.label.toLowerCase().replace('cv', 'CV');
         }
         sentence += ', ' + (REASON_CLAUSES[decision.reasonCode] || REASON_CLAUSES.INTRA_PASS_INTER_FAIL);
       } else if (failedSamples.length > 2) {
@@ -964,6 +994,7 @@
     ratio: ratio,
     RATIO_BUCKETS: RATIO_BUCKETS,
     bucketForRatio: bucketForRatio,
+    CV_GATES: CV_GATES,
     THRESHOLDS: THRESHOLDS,
     MIN_SAMPLES_FOR_BATCH_SIGNAL: MIN_SAMPLES_FOR_BATCH_SIGNAL,
     ASSUMPTIONS: ASSUMPTIONS,
